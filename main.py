@@ -25,6 +25,7 @@ from src.classifier import classify_email, UNKNOWN_TYPE
 from src.responder import generate_reply
 from src.notifier import send_approval_request, wait_for_approval, resolve_approval
 
+os.makedirs("logs", exist_ok=True)
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
@@ -143,8 +144,6 @@ async def send_startup_message(context: ContextTypes.DEFAULT_TYPE):
 # --- Start ---
 
 def main():
-    os.makedirs("logs", exist_ok=True)
-
     token = os.getenv("TELEGRAM_BOT_TOKEN")
     app = Application.builder().token(token).build()
 
