@@ -52,6 +52,38 @@ TELEGRAM_BOT_TOKEN=    # Telegram bot
 
 ## Mail Agent — E-mailový agent
 
+### Repo role
+- Tento repozitář slouží jako základ pro více variant mail agentů
+- Současná implementace je referenční MVP pro Gmail + Telegram approval flow
+- Nové varianty agentů mají znovu použít stejnou projektovou memory strukturu:
+  - `docs/project_notes/key_facts.md`
+  - `docs/project_notes/decisions.md`
+  - `docs/project_notes/bugs.md`
+  - `docs/project_notes/issues.md`
+  - `tasks/todo.md`
+  - `tasks/lessons.md`
+
+### Jádro šablony
+- `main.py` — orchestrace checku, approval flow a schedulingu
+- `src/gmail_client.py` — integrace s mailboxem
+- `src/classifier.py` — intent klasifikace
+- `src/responder.py` — generování odpovědi
+- `src/notifier.py` — human approval / notification vrstva
+- `prompts/` — agent-specific chování
+
+### Co se mění mezi variantami agenta
+- klasifikační kategorie
+- prompty a tone of voice
+- zdroje pravdivých dat
+- pravidla automatizace a eskalace
+- schvalovací kanál
+- business logika pro odpovědi
+
+### Cíl šablony
+- rychle založit nový mail agent bez přepisování orchestrace
+- zachovat prezentovatelný a nasaditelný základ
+- držet jednoduchý Python stack vhodný pro Railway
+
 ### Typy emailů
 - **type_a** — zákazník se ptá na produkt (co dělá, jestli se jedná o správný výrobek)
 - **type_b** — zákazník se ptá na stav objednávky (odesláno? kdy dorazí?)

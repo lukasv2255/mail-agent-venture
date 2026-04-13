@@ -25,6 +25,21 @@
 
 ---
 
+## 2026-04-13 — Šablony ukotvovat do projektové memory
+
+**Situace:** Vznikal obecný podklad pro support use-cases, ale uživatel upřesnil,
+že výstup má sloužit jako šablona přímo pro tento projekt a jeho další mail agenty.
+
+**Chyba:** Příliš obecný dokument bez pevného napojení na `CLAUDE.md`,
+`docs/project_notes/` a `tasks/`.
+
+**Správně:** Když se staví reusable template, ukotvit ji do existující projektové
+struktury, decisions a key facts, ne jen do samostatného dokumentu.
+
+**Pravidlo:** Obecný návrh vždy převeď do místní projektové memory a repové šablony.
+
+---
+
 ## Šablona záznamu
 
 ```markdown

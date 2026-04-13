@@ -73,6 +73,36 @@
 
 ---
 
+## ADR-006: Tento repozitář je šablona pro více mail agent variant
+
+**Datum:** 2026-04-13
+**Status:** Přijato
+
+**Rozhodnutí:** Repozitář nebude veden jen jako jednorázový Gmail agent, ale jako
+základní template pro více typů mail agentů se společnou architekturou.
+
+**Pevné části šablony:**
+- Python orchestrace
+- modulární vrstvy `classifier`, `responder`, `notifier`, `gmail_client`
+- prompts jako hlavní konfigurovatelná vrstva chování
+- project memory v `docs/project_notes/` a `tasks/`
+
+**Proměnné části šablony:**
+- intent taxonomy
+- business pravidla
+- datové integrace
+- schvalovací workflow
+- komunikační tón a brandové instrukce
+
+**Důvod:** Chceme stavět více prezentovatelných agentů rychleji a konzistentně.
+Společná kostra snižuje množství přepisovaného kódu a zároveň zachovává
+čitelnost a nasaditelnost.
+
+**Vyhýbáme se:** Vytváření každého nového mail agenta od nuly bez sdílené
+struktury, dokumentace a opakovaně použitelného workflow.
+
+---
+
 ## Šablona pro nové ADR
 
 ```markdown
