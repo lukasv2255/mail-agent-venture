@@ -31,6 +31,16 @@
 - **RAG citační vyhledávač** — Python + ChromaDB + ~1000 studií, nasazeno na Railway
 - **Rohlik.cz Telegram bot** — automatické nákupy přes Telegram
 - **Nutriční/tréninkový asistent** — ChatGPT s video transkripty, pro vztah trenér-klient
+- **Mail Agent** — e-mailový agent pro Gmail, nasazeno na Railway
+
+## Mail Agent — Infrastruktura
+
+- **Railway token:** `e2b4b43c-b5c1-4ab8-9885-70d936782acc`
+- **Railway Project ID:** `2e231bd5-5020-4327-8df5-e059f0fcbb8a`
+- **Railway Service ID:** `814fa52b-18b6-4e3c-8127-85cbae48eb16`
+- **GitHub:** `https://github.com/lukasv2255/mail-agent`
+- **Gmail:** `newagent7878@gmail.com`
+- **Telegram Chat ID:** `479991910`
 
 ---
 

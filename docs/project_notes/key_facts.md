@@ -41,6 +41,15 @@ TELEGRAM_BOT_TOKEN=    # Telegram bot
 - Env proměnné nastaveny přímo v Railway dashboardu (ne v .env souboru)
 - `Procfile` nebo `railway.json` pro definici start příkazu
 
+## Mail Agent — Railway infrastruktura
+
+- **Railway token:** `e2b4b43c-b5c1-4ab8-9885-70d936782acc`
+- **Project ID:** `2e231bd5-5020-4327-8df5-e059f0fcbb8a`
+- **Service ID:** `814fa52b-18b6-4e3c-8127-85cbae48eb16`
+- **GitHub repo:** `https://github.com/lukasv2255/mail-agent`
+- **Gmail:** `newagent7878@gmail.com`
+- **Telegram Chat ID:** `479991910`
+
 ## Mail Agent — E-mailový agent
 
 ### Typy emailů
