@@ -122,16 +122,17 @@ BUSINESS_HOURS_ONLY_NOTIFY=true
 
 ## Delivery plán
 
-| Fáze                  | Co se dělá                                | Kdy     |
-| --------------------- | ----------------------------------------- | ------- |
-| 1. Azure setup        | App registration, permissions, secret     | Den 1   |
-| 2. Slack setup        | Slack app, bot token, kanály              | Den 1   |
-| 3. Railway deploy     | Env proměnné, DRY_RUN test                | Den 2   |
-| 4. KB příprava        | Skladovost, produkty, objednávkový proces | Den 2–3 |
-| 5. Testování          | 10 testovacích e-mailů                    | Den 3–4 |
-| 6. Slack routing      | Nastavit různé kanály pro různé typy      | Den 4   |
-| 7. Schválení klientem | Obchodní zástupce testuje Slack schválení | Den 5–6 |
-| 8. Produkce           | DRY_RUN=false                             | Den 7   |
+| Fáze              | Co se dělá                                         | Kdy      |
+| ----------------- | -------------------------------------------------- | -------- |
+| 1. Azure setup    | App registration, permissions, secret              | Den 1    |
+| 2. Slack setup    | Slack app, bot token, kanály                       | Den 1    |
+| 3. Railway deploy | Env proměnné, DRY_RUN test                         | Den 2    |
+| 4. KB příprava    | Skladovost, produkty, objednávkový proces          | Den 2–3  |
+| 5. Testování      | 10 testovacích e-mailů                             | Den 3–4  |
+| 6. Slack routing  | Nastavit různé kanály pro různé typy               | Den 4    |
+| 7. Shadow mode    | Agent generuje drafty, zástupce odpovídá paralelně | Den 5–14 |
+| 8. Vyhodnocení    | Kolik % draftů bylo správných? Metriky per typ     | Den 15   |
+| 9. Produkce       | Zapnout nejdřív stav objednávky + skladovost       | Den 16   |
 
 Delší delivery oproti projektům 01 a 02 — kvůli Azure setup a složitějšímu routingu.
 
@@ -148,6 +149,61 @@ Delší delivery oproti projektům 01 a 02 — kvůli Azure setup a složitějš
 | Obnova Azure Client secret (1× za 2 roky)   | 500 Kč       |
 
 Nejvyšší setup fee ze všech tří projektů — Azure registrace a Slack integrace jsou složitější.
+
+---
+
+## Knowledge Base a učení agenta
+
+### KB — čím víc firma dodá, tím líp agent odpovídá
+
+Firma dodá katalog produktů, skladovost, obchodní podmínky → agent odpovídá přesně bez eskalace.
+Při větším katalogu (stovky SKU) → ChromaDB RAG pro vyhledávání relevantních produktů.
+
+**Co dodat pro projekt 03:**
+
+- Produktový katalog (kategorie, parametry, certifikace, dostupnost)
+- Obchodní podmínky (minimální odběr, platební podmínky, dodací lhůty)
+- Interní procesy (kdo schvaluje velké objednávky, kdo řeší reklamace)
+
+### Zaměstnanci učí agenta tipy
+
+Přes Slack příkaz `/learn` v kanálu `#support-agent`:
+
+```
+/learn Odběratelé z veřejného sektoru vždy potřebují fakturu s DIČ — zeptat se při první objednávce.
+/learn Na dotazy o ISO certifikaci přiložit odkaz na certifikát v Google Drive.
+```
+
+Agent uloží tip do `prompts/tips.md` a příště ho použije automaticky.
+
+### Agent se učí z odpovědí
+
+- Schválení → draft byl dobrý, uloží jako vzor pro daný typ odběratele
+- Zamítnutí + oprava obchodním zástupcem → agent zaznamená rozdíl do `prompts/corrections.md`
+- Opakované zamítání stejného typu → agent sníží sebedůvěru, začne častěji žádat o schválení
+
+---
+
+## Chování při chybějící informaci
+
+Když agent nedokáže odpovědět (produkt není v KB, neobvyklý požadavek, chybí data z ERP), neeskaluje rovnou — nejdřív se pokusí situaci vyřešit sám nebo s pomocí klienta.
+
+**Postup:**
+
+1. Agent pošle do Slack kanálu zprávu s popisem problému:
+   _"❓ Neznám odpověď na tento dotaz. Navrhuju: [návrh odpovědi / otázka na zákazníka]. Doplň chybějící info nebo schval/zamítni."_
+
+2. Obchodní zástupce má tři možnosti:
+   - Odpoví do Slack vlákna s chybějící informací → agent vygeneruje nový draft a znovu pošle ke schválení
+   - Klikne Schválit (navržený draft odejde beze změny)
+   - Klikne Zamítnout a řeší ručně
+
+3. Pokud nikdo nereaguje do 2 hodin → agent přeskočí a zaloguje jako `needs_human`. Mimo pracovní dobu čeká do rána.
+
+**Příklad — projekt 03:**
+Odběratel se ptá: _"Máte certifikaci ISO 9001 pro vaše produkty? Potřebujeme doklad pro audit."_
+Agent neví → pošle do Slacku: _"❓ Dotaz na ISO certifikaci — není v KB. Navrhuju odpovědět: 'Certifikaci ověříme a zašleme do 24 h.' Schválit nebo doplnit info?"_
+Obchodní zástupce doplní číslo certifikátu → agent vygeneruje draft s konkrétním číslem a pošle ke schválení.
 
 ---
 

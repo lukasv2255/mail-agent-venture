@@ -14,13 +14,14 @@
 
 ## Co agent řeší
 
-| Typ e-mailu      | Akce agenta                 | Schválení     |
-| ---------------- | --------------------------- | ------------- |
-| Stav objednávky  | Dohledá podle čísla, odpoví | Telegram /yes |
-| Dotaz na produkt | Odpověď z produktové KB     | Telegram /yes |
-| Vrácení zboží    | Pošle instrukce             | Telegram /yes |
-| Reklamace        | Eskaluje na člověka         | —             |
-| Spam / neznámé   | Ignoruje                    | —             |
+| Typ e-mailu      | Akce agenta                                    | Schválení     |
+| ---------------- | ---------------------------------------------- | ------------- |
+| Stav objednávky  | Dohledá podle čísla, odpoví                    | Telegram /yes |
+| Dotaz na produkt | Odpověď z produktové KB                        | Telegram /yes |
+| Vrácení zboží    | Pošle instrukce                                | Telegram /yes |
+| Reklamace        | Eskaluje na člověka                            | —             |
+| Neúplný dotaz    | Navrhne odpověď nebo požádá klienta o doplnění | Telegram /yes |
+| Spam / neznámé   | Ignoruje                                       | —             |
 
 ---
 
@@ -95,13 +96,14 @@ CHECK_INTERVAL_MINUTES=30
 
 ## Delivery plán
 
-| Fáze                  | Co se dělá                                   | Kdy     |
-| --------------------- | -------------------------------------------- | ------- |
-| 1. Setup              | Gmail OAuth, Railway deploy, DRY_RUN test    | Den 1   |
-| 2. Testování          | 10 testovacích e-mailů, kontrola klasifikace | Den 2–3 |
-| 3. Schválení klientem | Klient vidí drafty, dává zpětnou vazbu       | Den 4   |
-| 4. Ladění             | Úprava promptů, eskalačních pravidel         | Den 5   |
-| 5. Produkce           | DRY_RUN=false, reálné odesílání              | Den 6   |
+| Fáze           | Co se dělá                                             | Kdy      |
+| -------------- | ------------------------------------------------------ | -------- |
+| 1. Setup       | Gmail OAuth, Railway deploy, DRY_RUN test              | Den 1    |
+| 2. Testování   | 10 testovacích e-mailů, kontrola klasifikace           | Den 2–3  |
+| 3. Shadow mode | Agent generuje drafty, klient odpovídá ručně paralelně | Den 4–10 |
+| 4. Vyhodnocení | Kolik % draftů bylo správných? Které typy zapnout?     | Den 11   |
+| 5. Ladění      | Úprava promptů a KB dle výsledků shadow fáze           | Den 12   |
+| 6. Produkce    | Zapnout odesílání nejdřív pro stav objednávky + FAQ    | Den 13   |
 
 ---
 
@@ -112,6 +114,61 @@ CHECK_INTERVAL_MINUTES=30
 | Jednorázový setup                     | 8 000 Kč     |
 | Měsíční provoz (Railway + monitoring) | 1 500 Kč/měs |
 | Úpravy promptů a pravidel             | 500 Kč/hod   |
+
+---
+
+## Knowledge Base a učení agenta
+
+### KB — čím víc firma dodá, tím líp agent odpovídá
+
+Firma dodá produktové listy, FAQ, reklamační řád → agent odpovídá přesně bez eskalace.
+Uloženo v `prompts/` jako textové soubory. Při větším objemu → ChromaDB RAG.
+
+**Co dodat pro projekt 01:**
+
+- Složení a kontraindikace každého produktu
+- FAQ (nejčastějších 20 dotazů s odpověďmi)
+- Podmínky vrácení a reklamační řád
+
+### Zaměstnanci učí agenta tipy
+
+Přes Telegram příkaz `/learn`:
+
+```
+/learn Zákazníkům kteří zmiňují diabetes vždy doporučit konzultaci s lékařem.
+/learn Nepoužívat slovo "bohužel" — nahradit neutrální formulací.
+```
+
+Agent uloží tip do `prompts/tips.md` a příště ho použije automaticky.
+
+### Agent se učí z odpovědí
+
+- `/yes` → draft byl dobrý, uloží jako vzor
+- `/no` + klient napíše opravu → agent zaznamená rozdíl do `prompts/corrections.md`
+- Opakované zamítání stejného typu → agent začne častěji žádat o schválení
+
+---
+
+## Chování při chybějící informaci
+
+Když agent nedokáže odpovědět (chybí data v KB, neznámý dotaz, neobvyklá situace), neeskaluje rovnou — nejdřív se pokusí situaci vyřešit sám nebo s pomocí klienta.
+
+**Postup:**
+
+1. Agent sestaví Telegram zprávu s popisem problému:
+   _"❓ Neznám odpověď na tento dotaz. Navrhuju: [návrh odpovědi / otázka na zákazníka]. Doplň chybějící info nebo uprav a schval."_
+
+2. Klient má tři možnosti:
+   - Napíše chybějící informaci přímo do Telegramu → agent vygeneruje nový draft s tou informací a znovu pošle ke schválení
+   - Schválí navržený draft beze změny (`/yes`)
+   - Zamítne a řeší ručně (`/no`)
+
+3. Pokud klient nedoplní nic do 15 minut → agent přeskočí a zaloguje jako `needs_human`.
+
+**Příklad — projekt 01:**
+Zákazník se ptá: _"Můžu kombinovat váš protein s léky na štítnou žlázu?"_
+Agent neví → pošle: _"❓ Zdravotní dotaz mimo KB. Navrhuju zákazníkovi odpovědět: 'Doporučujeme konzultaci s lékařem.' Schválit?"_
+Klient odpoví `/yes` → zákazník dostane odpověď do 10 minut.
 
 ---
 

@@ -109,14 +109,15 @@ DASHBOARD_SECRET=...
 
 ## Delivery plán
 
-| Fáze                  | Co se dělá                               | Kdy     |
-| --------------------- | ---------------------------------------- | ------- |
-| 1. Setup              | IMAP přihlášení, Railway deploy, DRY_RUN | Den 1   |
-| 2. KB příprava        | Ceník, instrukce pro zákazníky, adresy   | Den 1–2 |
-| 3. Dashboard          | Zprovoznit web schválení                 | Den 2–3 |
-| 4. Testování          | 10 testovacích e-mailů přes druhý účet   | Den 3–4 |
-| 5. Schválení klientem | Recepční testuje dashboard               | Den 5   |
-| 6. Produkce           | DRY_RUN=false                            | Den 6–7 |
+| Fáze           | Co se dělá                                         | Kdy      |
+| -------------- | -------------------------------------------------- | -------- |
+| 1. Setup       | IMAP přihlášení, Railway deploy, DRY_RUN           | Den 1    |
+| 2. KB příprava | Ceník, instrukce pro zákazníky, adresy             | Den 1–2  |
+| 3. Dashboard   | Zprovoznit web schválení                           | Den 2–3  |
+| 4. Testování   | 10 testovacích e-mailů přes druhý účet             | Den 3–4  |
+| 5. Shadow mode | Agent generuje drafty, recepční odpovídá paralelně | Den 5–12 |
+| 6. Vyhodnocení | Kolik % draftů bylo správných? Kde se agent mýlil? | Den 13   |
+| 7. Produkce    | Zapnout nejdřív rezervace a dotazy na cenu         | Den 14   |
 
 ---
 
@@ -130,6 +131,61 @@ DASHBOARD_SECRET=...
 | Úpravy                        | 500 Kč/hod   |
 
 Vyšší setup fee oproti projektu 01 — kvůli web dashboardu a přípravě KB.
+
+---
+
+## Knowledge Base a učení agenta
+
+### KB — čím víc firma dodá, tím líp agent odpovídá
+
+Firma dodá ceník, seznam služeb, instrukce pro zákazníky → agent odpovídá přesně bez eskalace.
+Uloženo v `prompts/` jako textové soubory.
+
+**Co dodat pro projekt 02:**
+
+- Kompletní ceník služeb (výměna brzd, oleje, pneumatik, klimatizace...)
+- Otevírací doba, adresa, parkovací instrukce
+- Postup rezervace a co zákazník musí přinést
+
+### Zaměstnanci učí agenta tipy
+
+Přes web dashboard — pole "Přidat tip agentovi":
+
+```
+Zákazníkům s Octavií vždy zmínit že nabízíme i diagnostiku zdarma při servisu.
+Na dotazy na klimatizaci říct že sezóna je duben–červen, mimo sezónu delší čekací doba.
+```
+
+Agent uloží tip do `prompts/tips.md` a příště ho použije automaticky.
+
+### Agent se učí z odpovědí
+
+- Schválení → draft byl dobrý, uloží jako vzor
+- Zamítnutí + oprava recepční → agent zaznamená rozdíl do `prompts/corrections.md`
+- Opakované zamítání stejného typu → agent začne častěji čekat na schválení
+
+---
+
+## Chování při chybějící informaci
+
+Když agent nedokáže odpovědět (dotaz mimo KB, neznámý termín, nestandardní požadavek), neeskaluje rovnou — nejdřív se pokusí situaci vyřešit sám nebo s pomocí klienta.
+
+**Postup:**
+
+1. Agent sestaví zprávu do web dashboardu s popisem problému:
+   _"❓ Neznám odpověď na tento dotaz. Navrhuju: [návrh odpovědi / otázka na zákazníka]. Doplň chybějící info nebo uprav a schval."_
+
+2. Klient má tři možnosti:
+   - Napíše chybějící informaci do pole v dashboardu → agent vygeneruje nový draft a znovu zobrazí ke schválení
+   - Schválí navržený draft beze změny
+   - Zamítne a řeší ručně
+
+3. Pokud klient nedoplní nic do 2 hodin → agent přeskočí a zaloguje jako `needs_human`.
+
+**Příklad — projekt 02:**
+Zákazník se ptá: _"Opravujete také klimatizace? A kolik to stojí?"_
+KB klimatizace neobsahuje → agent zobrazí v dashboardu: _"❓ Klimatizace není v KB. Navrhuju zákazníkovi odpovědět: 'Ano, klimatizace opravujeme. Pro nacenění nás kontaktujte telefonicky.' Schválit nebo doplnit cenu?"_
+Recepční doplní cenu → agent vygeneruje nový draft s cenou a zobrazí ke schválení.
 
 ---
 

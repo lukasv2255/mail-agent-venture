@@ -484,3 +484,116 @@ Vývojář dodá kód, klient si nasadí na vlastní Railway nebo server.
 - [ ] `DRY_RUN=true` jako výchozí hodnota
 - [ ] Logování neukládá citlivý obsah e-mailů
 - [ ] Klient ví že musí provozovat na svém účtu (Model B)
+
+---
+
+## 14. Knowledge Base — čím víc firma ví, tím líp agent odpovídá
+
+Agent je tak dobrý jako informace které má k dispozici. Pokud firma dodá kvalitní KB, agent zvládne odpovědět i na složité dotazy bez eskalace.
+
+### Co patří do KB
+
+- Produktový katalog (složení, parametry, kompatibilita, kontraindikace)
+- FAQ — nejčastější dotazy s ideálními odpověďmi
+- Ceník, podmínky, reklamační řád
+- Interní procesy (jak se vyřizuje objednávka, kdo co řeší)
+- Tone of voice a zakázaná témata
+
+### Dva přístupy podle velikosti KB
+
+**Textové soubory v `prompts/`** — do ~50 stran textu
+Agent dostane celou KB přímo do promptu. Jednoduché, žádná extra infrastruktura. Vhodné pro většinu malých firem.
+
+**RAG s ChromaDB** — pro velké KB (stovky dokumentů)
+Agent vyhledá jen relevantní části, ne celý dokument. Projekt má zkušenosti z RAG citačního vyhledávače — stejný přístup.
+
+### Praktický dopad
+
+Bez KB: dotaz _"Je váš protein vhodný pro diabetiky?"_ → eskalace.
+S KB: agent vyhledá složení, kontraindikace, FAQ → odpověď bez zásahu člověka.
+
+---
+
+## 15. Učení agenta — od zaměstnanců i z vlastních odpovědí
+
+Agent se může zlepšovat dvěma způsoby.
+
+### Explicitní učení — zaměstnanci učí tipy a triky
+
+Zaměstnanec může agentovi předat pravidlo nebo tip přímo přes schvalovací kanál.
+
+**Příkaz `/learn`:**
+
+```
+/learn Zákazníkům kteří se ptají na protein a zmiňují diabetes vždy doporučit konzultaci s lékařem a přidat odkaz na FAQ.
+```
+
+Agent uloží tip do KB (`prompts/tips.md`) a příště ho použije automaticky.
+
+Podobně pro opravy tónu:
+
+```
+/learn Nepoužívat slovo "bohužel" — působí negativně. Nahradit neutrální formulací.
+```
+
+### Implicitní učení — z historii schválení a zamítnutí
+
+Agent sleduje vzory ze schvalovacího flow:
+
+- `/yes` na draft → odpověď byla dobrá, uložit jako vzor pro podobné e-maily
+- `/no` + opravená verze od klienta → agent porovná svůj draft s opravou a zaznamená rozdíl
+- Opakované zamítání stejného typu → agent sníží sebedůvěru pro daný typ, začne častěji žádat o schválení
+
+**Kde se ukládají vzory:**
+
+```
+prompts/
+  tips.md          ← manuální tipy od zaměstnanců (/learn)
+  approved/        ← příklady schválených odpovědí podle typu
+  corrections.md   ← záznamy oprav (co agent napsal vs. co klient chtěl)
+```
+
+### Limity
+
+- Agent se neučí sám přepisovat pravidla klasifikace — to dělá vývojář
+- Tipy a vzory se dají kdykoliv smazat nebo upravit
+- Učení funguje v rámci projektu — každý klient má vlastní KB a vlastní historii
+
+---
+
+## 16. Shadow mode — testování paralelně vedle reálného supportu
+
+Než agent začne odpovídat zákazníkům ostře, klient ho může testovat vedle sebe bez rizika.
+
+### Jak funguje
+
+Agent běží normálně — čte poštu, klasifikuje, generuje drafty, posílá ke schválení. Ale odesílání zákazníkovi je vypnuté. Zaměstnanec mezitím odpovídá ručně jako dřív.
+
+Výsledek: klient vidí co by agent napsal, porovná s vlastní odpovědí, dá zpětnou vazbu.
+
+```
+DRY_RUN=false   ← agent generuje drafty a posílá ke schválení
+SEND_ENABLED=false  ← ale reálně zákazníkovi neposílá
+```
+
+Nebo jednoduše: klient schvaluje `/yes` ale agent loguje místo odesílání — totéž co `DRY_RUN`, ale s Telegram notifikacemi aktivními.
+
+### Doporučený postup nasazení
+
+```
+Fáze 1 — DRY_RUN=true      Agent jen loguje, žádné Telegram notifikace
+Fáze 2 — Shadow mode        Agent posílá drafty ke schválení, zákazník nedostane nic
+Fáze 3 — Postupné zapínání  Nejdřív nejjednodušší typy (stav objednávky, FAQ)
+Fáze 4 — Plný provoz        Všechny schválené typy jdou automaticky nebo přes approval
+```
+
+### Metriky ze shadow mode
+
+Po 2 týdnech shadow mode vyhodnotit:
+
+- Kolik % draftů by bylo schváleno beze změny?
+- Které typy e-mailů agent zvládá dobře vs. kde se mýlí?
+- Jak rychle agent odpověděl vs. jak rychle zaměstnanec?
+- Kolik eskalací bylo oprávněných?
+
+Tato data určí které typy jsou připraveny na ostré odesílání a které potřebují ladění.
