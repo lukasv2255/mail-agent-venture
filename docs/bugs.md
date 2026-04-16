@@ -21,6 +21,21 @@
 
 ---
 
+## 2026-04-16 — Gmail token vyprší mezi sezeními
+
+**Symptom:** Agent při spuštění selže na Gmail API — token je neplatný nebo vypršel.
+
+**Root cause:** `token.json` obsahuje access_token (platný 1 hod) a refresh_token. Refresh token vyprší pokud je Google OAuth app ve stavu "Testing" a nepoužívá se 7 dní — Google ho automaticky zneplatní.
+
+**Řešení:** Znovu spustit OAuth flow: smazat `token.json` a spustit `gmail_client.py` lokálně — otevře prohlížeč pro nové přihlášení.
+
+**Prevence:**
+
+- Přidat Google OAuth app do stavu "Production" (nevyžaduje review pro osobní účty)
+- Nebo přidat validaci tokenu při startu agenta s automatickým refresh pokusem
+
+---
+
 ## Příklady
 
 ## 2026-03-29 — DB připojení selhává na stagingu

@@ -504,6 +504,10 @@ Agent je tak dobrý jako informace které má k dispozici. Pokud firma dodá kva
 **Textové soubory v `prompts/`** — do ~50 stran textu
 Agent dostane celou KB přímo do promptu. Jednoduché, žádná extra infrastruktura. Vhodné pro většinu malých firem.
 
+> `prompts/` = produkční data pro konkrétní nasazení (prázdné dokud není reálný klient).
+> `tests/` = vše testovací — KB, testovací emaily, prompty, fixtures — i pro budoucí projekty.
+> Při nasazení pro klienta se soubory z `tests/projekt_XX/` zkopírují a upraví do `prompts/`.
+
 **RAG s ChromaDB** — pro velké KB (stovky dokumentů)
 Agent vyhledá jen relevantní části, ne celý dokument. Projekt má zkušenosti z RAG citačního vyhledávače — stejný přístup.
 
@@ -511,6 +515,43 @@ Agent vyhledá jen relevantní části, ne celý dokument. Projekt má zkušenos
 
 Bez KB: dotaz _"Je váš protein vhodný pro diabetiky?"_ → eskalace.
 S KB: agent vyhledá složení, kontraindikace, FAQ → odpověď bez zásahu člověka.
+
+### KB adapter — přepínání zdroje dat
+
+Klient může mít data v existující databázi (katalog produktů, objednávky) a při ostrém nasazení chce aby agent četl přímo odtud, ne ze souborů.
+
+Řešení: agent nikdy nepracuje se zdrojem dat přímo — volá abstraktní funkci `get_kb()` a `kb_loader.py` rozhoduje odkud data přijdou.
+
+```python
+# src/kb_loader.py
+import os
+
+KB_SOURCE = os.getenv("KB_SOURCE", "file")  # "file" nebo "db"
+
+def get_products():
+    if KB_SOURCE == "file":
+        return _load_from_file("prompts/kb_produkty.md")
+    elif KB_SOURCE == "db":
+        return _load_from_db()
+
+def _load_from_file(path):
+    with open(path, encoding="utf-8") as f:
+        return f.read()
+
+def _load_from_db():
+    import psycopg2
+    conn = psycopg2.connect(os.getenv("DATABASE_URL"))
+    # SELECT * FROM produkty WHERE aktivni = true
+    ...
+```
+
+| Fáze      | `KB_SOURCE` | Data                                |
+| --------- | ----------- | ----------------------------------- |
+| Demo      | `file`      | vymyšlená KB v `tests/`             |
+| Integrace | `db`        | klient dá přístup k DB, napíšeš SQL |
+| Produkce  | `db`        | živá data klienta                   |
+
+Výhoda: `classifier.py` a `responder.py` se nemění. Přibývá jen `_load_from_db()` až klient dá přístup.
 
 ---
 
@@ -561,7 +602,30 @@ prompts/
 
 ---
 
-## 16. Shadow mode — testování paralelně vedle reálného supportu
+## 16. Živé demo před podpisem smlouvy
+
+Klient chce vidět reálný průběh — přišel e-mail, přišla odpověď — ale nechce dát přístup ke svému inboxu ani datům.
+
+**Řešení:** použij vlastní testovací inbox (např. `newagent7878@gmail.com`). Agent ho monitoruje přes Gmail API, KB je naplněná simulovanými daty klienta.
+
+```
+Klient pošle e-mail na testovací adresu
+  → agent přečte, klasifikuje, vygeneruje odpověď z KB
+  → Telegram: návrh odpovědi ke schválení (/yes / /no)
+  → agent odešle odpověď zpět klientovi
+```
+
+Klient může sledovat Telegram skupinu kde agent posílá návrhy — vidí přesně co agent "vidí" a jak rozhoduje.
+
+**Co připravit:**
+
+- KB s vymyšlenými daty klienta v `prompts/`
+- Agent běžící lokálně nebo na Railway
+- Klient ví na jakou adresu psát
+
+---
+
+## 17. Shadow mode — testování paralelně vedle reálného supportu
 
 Než agent začne odpovídat zákazníkům ostře, klient ho může testovat vedle sebe bez rizika.
 

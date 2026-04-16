@@ -19,9 +19,12 @@ def get_client():
     return client
 
 
+PROMPTS_DIR = "prompts"
+
+
 def load_classifier_prompt():
     prompt_file = os.path.join(
-        os.path.dirname(__file__), "..", "prompts", "classifier_prompt.txt"
+        os.path.dirname(__file__), "..", PROMPTS_DIR, "classifier_prompt.txt"
     )
     with open(prompt_file, encoding="utf-8") as f:
         return f.read()

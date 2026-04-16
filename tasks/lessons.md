@@ -5,6 +5,18 @@
 
 ---
 
+## 2026-04-16 — Nikdy nepřepisovat .env bez kontroly
+
+**Situace:** Uživatel řekl "vytvoř .env", soubor už existoval a byl vyplněný. Claude ho přepsal.
+
+**Chyba:** Použil Write bez předchozího ověření existence souboru.
+
+**Správně:** Před vytvořením `.env` vždy zkontrolovat `ls` nebo `Glob` jestli soubor existuje. Pokud ano, vypsat obsah a zeptat se jestli přepsat.
+
+**Pravidlo:** `.env` nelze obnovit z gitu — přepsání = ztráta dat.
+
+---
+
 ## Obecné principy práce s Tommym
 
 - Tommy se **učí**, nejen kopíruje — vždy vysvětli proč, nejen co

@@ -163,3 +163,9 @@ def get_or_create_label(service, label_name):
     ).execute()
     logger.info(f"Vytvořen Gmail label: {label_name}")
     return new_label["id"]
+
+
+if __name__ == "__main__":
+    print("Spouštím Gmail OAuth flow...")
+    service = get_gmail_service()
+    print("✅ token.json vytvořen. Gmail API připojeno.")

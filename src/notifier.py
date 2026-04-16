@@ -5,11 +5,12 @@ Sdílí jednu PTB Application instanci s main.py.
 import asyncio
 import logging
 import os
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 # Globální future pro čekání na /yes nebo /no
-_pending_approval: asyncio.Future | None = None
+_pending_approval: Optional[asyncio.Future] = None
 
 
 def set_pending_approval(future: asyncio.Future):

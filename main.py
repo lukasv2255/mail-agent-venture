@@ -15,12 +15,7 @@ load_dotenv()
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
-from src.gmail_client import (
-    get_gmail_service,
-    get_unprocessed_emails,
-    mark_as_processed,
-    send_reply,
-)
+from src.mail_client import get_unprocessed_emails, mark_as_processed, send_reply
 from src.classifier import classify_email, UNKNOWN_TYPE
 from src.responder import generate_reply
 from src.notifier import send_approval_request, wait_for_approval, resolve_approval
@@ -47,26 +42,25 @@ async def process_email(bot, email):
     """Zpracuje jeden email: klasifikace → generování → potvrzení → odeslání."""
     logger.info(f"Zpracovávám: '{email['subject']}' od {email['from']}")
 
-    service = get_gmail_service()
     email_type = classify_email(email)
 
     if email_type == UNKNOWN_TYPE:
         logger.info("Neznámý typ — přeskakuji.")
-        mark_as_processed(service, email["id"])
+        mark_as_processed(email["id"])
         return
 
     draft = generate_reply(email, email_type)
 
     if DRY_RUN:
         logger.info(f"[DRY RUN] Draft odpovědi:\n{draft}\n---")
-        mark_as_processed(service, email["id"])
+        mark_as_processed(email["id"])
         return
 
     await send_approval_request(bot, email, email_type, draft)
     approved = await wait_for_approval(timeout_seconds=300)
 
     if approved:
-        send_reply(service, email, draft)
+        send_reply(email, draft)
         logger.info("Email odeslán.")
         await bot.send_message(
             chat_id=os.getenv("TELEGRAM_CHAT_ID"),
@@ -79,15 +73,14 @@ async def process_email(bot, email):
             text="❌ Email přeskočen."
         )
 
-    mark_as_processed(service, email["id"])
+    mark_as_processed(email["id"])
 
 
 async def run_check(bot):
     """Zkontroluje nové emaily. Používá zámek aby nešly dva checy najednou."""
     async with _check_lock:
         logger.info("Spouštím check nových emailů...")
-        service = get_gmail_service()
-        emails = get_unprocessed_emails(service)
+        emails = get_unprocessed_emails()
 
         if not emails:
             logger.info("Žádné nové emaily.")
@@ -105,8 +98,7 @@ async def run_check(bot):
 async def cmd_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """/check — okamžitý check emailů."""
     await update.message.reply_text("🔍 Spouštím check emailů...")
-    await run_check(context.bot)
-    await update.message.reply_text("✅ Check dokončen.")
+    asyncio.create_task(run_check(context.bot))
 
 
 async def cmd_yes(update: Update, context: ContextTypes.DEFAULT_TYPE):

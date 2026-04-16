@@ -6,7 +6,11 @@ import os
 
 from openai import OpenAI
 
+from src.kb_loader import load_kb
+
 logger = logging.getLogger(__name__)
+
+PROMPTS_DIR = "prompts"
 
 client = None
 
@@ -20,7 +24,7 @@ def get_client():
 
 def load_response_prompt(email_type):
     prompt_file = os.path.join(
-        os.path.dirname(__file__), "..", "prompts", f"response_{email_type}.txt"
+        os.path.dirname(__file__), "..", PROMPTS_DIR, f"response_{email_type}.txt"
     )
     if not os.path.exists(prompt_file):
         raise FileNotFoundError(f"Prompt soubor neexistuje: {prompt_file}")
@@ -33,6 +37,9 @@ def generate_reply(email, email_type):
     Vygeneruje text odpovědi pro daný email a typ.
     """
     system_prompt = load_response_prompt(email_type)
+    kb = load_kb()
+    if kb:
+        system_prompt = f"{system_prompt}\n\n## Knowledge Base\n\n{kb}"
 
     user_message = (
         f"Od: {email['from']}\n"
