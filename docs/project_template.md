@@ -327,6 +327,18 @@ Agent odesílá low-risk odpovědi rovnou bez čekání.
 
 ---
 
+### Telegram — known issues a řešení
+
+**ESC a UNK zprávy mohou zapadnout v chatu**
+Drafty ke schválení, ESC upozornění a UNK notifikace přicházejí do jednoho chatu a mohou se promíchat.
+→ Řešení: ESC a UNK zprávy se automaticky připnou (`pin_chat_message`) — zůstanou viditelné nahoře dokud je klient ručně neodepne.
+
+**Timeout schválení**
+Klient může být nedostupný celý den — původní 5 minutový timeout způsoboval tiché přeskočení emailu.
+→ Řešení: timeout nastaven na 1 hodinu. Po vypršení agent pošle Telegram upozornění a email **neoznačí jako zpracovaný** — zpracuje se při příštím `/check`. `/no` stále označí email jako vyřízený (vědomé zamítnutí).
+
+---
+
 ### Doporučení podle situace
 
 - **Vývoj a testování** → Telegram

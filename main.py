@@ -34,6 +34,14 @@ logger = logging.getLogger(__name__)
 DRY_RUN = os.getenv("DRY_RUN", "true").lower() == "true"
 CHECK_INTERVAL = int(os.getenv("CHECK_INTERVAL_MINUTES", "60")) * 60
 
+MAIL_CLIENT = os.getenv("MAIL_CLIENT", "gmail")
+MAIL_ADDRESS = {
+    "gmail": os.getenv("GMAIL_ADDRESS", "—"),
+    "imap": os.getenv("IMAP_USER", "—"),
+    "graph": os.getenv("GRAPH_USER_EMAIL", "—"),
+    "helpdesk": os.getenv("HELPDESK_EMAIL", "—"),
+}.get(MAIL_CLIENT, "—")
+
 # Zámek aby nespustily dva checy najednou
 _check_lock = asyncio.Lock()
 
@@ -49,20 +57,24 @@ async def process_email(bot, email):
 
     if email_type == UNKNOWN_TYPE:
         logger.info("Neznámý typ — přeskakuji.")
-        await bot.send_message(
-            chat_id=os.getenv("TELEGRAM_CHAT_ID"),
+        chat_id = os.getenv("TELEGRAM_CHAT_ID")
+        msg = await bot.send_message(
+            chat_id=chat_id,
             text=(
                 f"⚪ Nezpracováno (UNK)\n"
                 f"Od: {email['from']}\n"
-                f"Předmět: {email['subject']}"
+                f"Předmět: {email['subject']}\n\n"
+                f"{email['body'][:300]}"
             )
         )
+        await bot.pin_chat_message(chat_id=chat_id, message_id=msg.message_id, disable_notification=True)
         return
 
     if email_type == ESCALATION_TYPE:
         logger.info("Eskalace — notifikuji člověka.")
-        await bot.send_message(
-            chat_id=os.getenv("TELEGRAM_CHAT_ID"),
+        chat_id = os.getenv("TELEGRAM_CHAT_ID")
+        msg = await bot.send_message(
+            chat_id=chat_id,
             text=(
                 f"🚨 Eskalace — vyžaduje lidskou reakci\n"
                 f"Od: {email['from']}\n"
@@ -70,6 +82,7 @@ async def process_email(bot, email):
                 f"{email['body'][:300]}"
             )
         )
+        await bot.pin_chat_message(chat_id=chat_id, message_id=msg.message_id, disable_notification=True)
         mark_as_processed(email["id"])
         return
 
@@ -86,9 +99,17 @@ async def process_email(bot, email):
         return
 
     await send_approval_request(bot, email, email_type, draft)
-    approved = await wait_for_approval(timeout_seconds=300)
+    approved = await wait_for_approval(bot)
 
-    if approved:
+    if approved is None:
+        # Timeout — email zůstane nezpracovaný, zpracuje se při příštím /check
+        logger.info("Timeout — email vrácen do fronty.")
+        return
+    elif approved:
+        await bot.send_message(
+            chat_id=os.getenv("TELEGRAM_CHAT_ID"),
+            text="👍 Odesílám..."
+        )
         send_reply(email, draft)
         logger.info("Email odeslán.")
         await bot.send_message(
@@ -96,7 +117,7 @@ async def process_email(bot, email):
             text="✅ Email byl odeslán."
         )
     else:
-        logger.info("Email nebyl odeslán.")
+        logger.info("Email zamítnut.")
         await bot.send_message(
             chat_id=os.getenv("TELEGRAM_CHAT_ID"),
             text="❌ Email přeskočen."
@@ -137,7 +158,6 @@ async def cmd_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def cmd_yes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """/yes — schválí čekající odpověď."""
     await resolve_approval(True)
-    await update.message.reply_text("👍 Odesílám...")
 
 
 async def cmd_no(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -157,7 +177,7 @@ async def send_startup_message(context: ContextTypes.DEFAULT_TYPE):
     mode = "🔇 DRY RUN" if DRY_RUN else "🟢 PRODUKCE"
     text = (
         f"🤖 E-mailový agent spuštěn — {mode}\n"
-        f"📧 {os.getenv('GMAIL_ADDRESS', '—')}\n"
+        f"📧 {MAIL_ADDRESS} ({MAIL_CLIENT})\n"
         f"⏱ Check každých {CHECK_INTERVAL // 60} min\n\n"
         f"Zpracovávám:\n"
         f"  A1 stav objednávky\n"

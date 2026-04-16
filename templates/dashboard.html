@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="cs">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mail Agent — Dashboard</title>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        background: #111;
+        color: #e0e0e0;
+        font-family: "Segoe UI", sans-serif;
+        font-size: 14px;
+        padding: 24px;
+        max-width: 800px;
+        margin: 0 auto;
+      }
+
+      h1 {
+        font-size: 1.3rem;
+        margin-bottom: 6px;
+      }
+
+      .meta {
+        font-size: 11px;
+        color: #555;
+        margin-bottom: 24px;
+      }
+      .meta span {
+        margin-right: 16px;
+      }
+      .badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 10px;
+        font-weight: bold;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      .badge.dry {
+        background: #333;
+        color: #888;
+      }
+      .badge.live {
+        background: #1a3a1a;
+        color: #4caf50;
+      }
+
+      /* Karta čekajícího emailu */
+      #pending-card {
+        background: #1a1a1a;
+        border: 1px solid #2a2a2a;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 20px;
+      }
+      #pending-card.empty {
+        border-color: #1a1a1a;
+        color: #444;
+        text-align: center;
+        padding: 40px;
+      }
+
+      .email-meta {
+        margin-bottom: 16px;
+      }
+      .email-meta .row {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 4px;
+        font-size: 12px;
+      }
+      .email-meta .label {
+        color: #555;
+        min-width: 70px;
+      }
+      .email-meta .value {
+        color: #e0e0e0;
+      }
+      .email-meta .type-badge {
+        display: inline-block;
+        padding: 1px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: bold;
+        background: #1a2a3a;
+        color: #4db6ff;
+      }
+
+      .section-label {
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: #555;
+        margin-bottom: 8px;
+      }
+
+      .draft-box {
+        background: #0d0d0d;
+        border: 1px solid #222;
+        border-radius: 6px;
+        padding: 14px;
+        font-size: 13px;
+        line-height: 1.6;
+        color: #ccc;
+        white-space: pre-wrap;
+        margin-bottom: 20px;
+      }
+
+      .actions {
+        display: flex;
+        gap: 12px;
+      }
+      button {
+        flex: 1;
+        padding: 12px;
+        border: none;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: bold;
+        cursor: pointer;
+        transition: opacity 0.15s;
+      }
+      button:hover {
+        opacity: 0.85;
+      }
+      button:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+      #btn-approve {
+        background: #2d5a2d;
+        color: #7ecf7e;
+      }
+      #btn-reject {
+        background: #3a1f1f;
+        color: #cf7e7e;
+      }
+
+      #status {
+        font-size: 11px;
+        color: #555;
+        margin-top: 12px;
+        min-height: 16px;
+      }
+      #status.error {
+        color: #c44;
+      }
+      #status.ok {
+        color: #4a4;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Mail Agent</h1>
+    <div class="meta">
+      <span id="meta-client">—</span>
+      <span id="meta-mode"></span>
+    </div>
+
+    <div id="pending-card" class="empty">Načítám...</div>
+
+    <div id="status"></div>
+
+    <script>
+      const REFRESH_MS = 5000;
+
+      async function refresh() {
+        try {
+          const res = await fetch("/api/status");
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const data = await res.json();
+
+          // Meta
+          document.getElementById("meta-client").textContent =
+            `📬 ${data.mail_client}`;
+          const modeEl = document.getElementById("meta-mode");
+          modeEl.innerHTML = data.dry_run
+            ? '<span class="badge dry">DRY RUN</span>'
+            : '<span class="badge live">PRODUKCE</span>';
+
+          // Pending
+          const card = document.getElementById("pending-card");
+          if (!data.pending) {
+            card.className = "empty";
+            card.innerHTML = "📭 Žádný email nečeká na schválení";
+            return;
+          }
+
+          const p = data.pending;
+          card.className = "";
+          card.innerHTML = `
+      <div class="email-meta">
+        <div class="row"><span class="label">Od:</span><span class="value">${esc(p.from)}</span></div>
+        <div class="row"><span class="label">Předmět:</span><span class="value">${esc(p.subject)}</span></div>
+        <div class="row"><span class="label">Typ:</span><span class="type-badge">${esc(p.email_type)}</span></div>
+      </div>
+      <div class="section-label">Navrhovaná odpověď</div>
+      <div class="draft-box">${esc(p.draft)}</div>
+      <div class="actions">
+        <button id="btn-approve" onclick="approve()">✅ Schválit a odeslat</button>
+        <button id="btn-reject"  onclick="reject()">❌ Zamítnout</button>
+      </div>
+    `;
+
+          setStatus("");
+        } catch (err) {
+          setStatus(`Chyba: ${err.message}`, "error");
+        }
+      }
+
+      async function approve() {
+        await action("/api/approve");
+      }
+
+      async function reject() {
+        await action("/api/reject");
+      }
+
+      async function action(url) {
+        document.querySelectorAll("button").forEach((b) => (b.disabled = true));
+        try {
+          const res = await fetch(url, { method: "POST" });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          setStatus("Odesláno.", "ok");
+          setTimeout(refresh, 1500);
+        } catch (err) {
+          setStatus(`Chyba: ${err.message}`, "error");
+          document
+            .querySelectorAll("button")
+            .forEach((b) => (b.disabled = false));
+        }
+      }
+
+      function setStatus(msg, cls = "") {
+        const el = document.getElementById("status");
+        el.textContent = msg;
+        el.className = cls;
+      }
+
+      function esc(str) {
+        return String(str)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      refresh();
+      setInterval(refresh, REFRESH_MS);
+    </script>
+  </body>
+</html>

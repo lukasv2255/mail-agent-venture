@@ -18,6 +18,7 @@ Env proměnné:
   SMTP_PORT      (default: 587)
 """
 import email
+import email.header
 import imaplib
 import logging
 import os
@@ -62,9 +63,9 @@ def get_unprocessed_emails() -> list[dict]:
         emails.append({
             "id": eid.decode(),
             "thread_id": msg.get("Message-ID", ""),
-            "from": msg.get("From", ""),
-            "to": msg.get("To", ""),
-            "subject": msg.get("Subject", ""),
+            "from": _decode_header(msg.get("From", "")),
+            "to": _decode_header(msg.get("To", "")),
+            "subject": _decode_header(msg.get("Subject", "")),
             "date": msg.get("Date", ""),
             "body": _extract_body(msg),
         })
@@ -99,6 +100,18 @@ def send_reply(email_data: dict, text: str):
         server.send_message(msg)
 
     logger.info(f"Odpověď odeslána na {email_data['from']} (SMTP).")
+
+
+def _decode_header(value: str) -> str:
+    """Dekóduje RFC 2047 hlavičku (=?utf-8?q?...?=) na čitelný text."""
+    parts = email.header.decode_header(value)
+    decoded = []
+    for part, charset in parts:
+        if isinstance(part, bytes):
+            decoded.append(part.decode(charset or "utf-8", errors="replace"))
+        else:
+            decoded.append(part)
+    return " ".join(decoded)
 
 
 def _extract_body(msg) -> str:
