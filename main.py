@@ -16,7 +16,7 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
 from src.mail_client import get_unprocessed_emails, mark_as_processed, send_reply
-from src.classifier import classify_email, UNKNOWN_TYPE
+from src.classifier import classify_email, UNKNOWN_TYPE, ESCALATION_TYPE, AUTO_REPLY_TYPES
 from src.responder import generate_reply
 from src.notifier import send_approval_request, wait_for_approval, resolve_approval
 
@@ -42,10 +42,39 @@ async def process_email(bot, email):
     """Zpracuje jeden email: klasifikace → generování → potvrzení → odeslání."""
     logger.info(f"Zpracovávám: '{email['subject']}' od {email['from']}")
 
+    # Označit hned — zabrání dvojímu zpracování i kdyby byl email v threadu s reply
+    mark_as_processed(email["id"])
+
     email_type = classify_email(email)
 
     if email_type == UNKNOWN_TYPE:
         logger.info("Neznámý typ — přeskakuji.")
+        await bot.send_message(
+            chat_id=os.getenv("TELEGRAM_CHAT_ID"),
+            text=(
+                f"⚪ Nezpracováno (UNK)\n"
+                f"Od: {email['from']}\n"
+                f"Předmět: {email['subject']}"
+            )
+        )
+        return
+
+    if email_type == ESCALATION_TYPE:
+        logger.info("Eskalace — notifikuji člověka.")
+        await bot.send_message(
+            chat_id=os.getenv("TELEGRAM_CHAT_ID"),
+            text=(
+                f"🚨 Eskalace — vyžaduje lidskou reakci\n"
+                f"Od: {email['from']}\n"
+                f"Předmět: {email['subject']}\n\n"
+                f"{email['body'][:300]}"
+            )
+        )
+        mark_as_processed(email["id"])
+        return
+
+    if email_type not in AUTO_REPLY_TYPES:
+        logger.info(f"Neznámý typ '{email_type}' — přeskakuji.")
         mark_as_processed(email["id"])
         return
 
@@ -84,6 +113,10 @@ async def run_check(bot):
 
         if not emails:
             logger.info("Žádné nové emaily.")
+            await bot.send_message(
+                chat_id=os.getenv("TELEGRAM_CHAT_ID"),
+                text="📭 Žádné nové emaily."
+            )
             return
 
         for email in emails:
@@ -121,14 +154,20 @@ async def scheduled_check(context: ContextTypes.DEFAULT_TYPE):
 async def send_startup_message(context: ContextTypes.DEFAULT_TYPE):
     """Pošle uvítací zprávu při startu agenta."""
     chat_id = os.getenv("TELEGRAM_CHAT_ID")
+    mode = "🔇 DRY RUN" if DRY_RUN else "🟢 PRODUKCE"
     text = (
-        f"🤖 E-mailový agent spuštěn\n"
-        f"Monitoruji: {os.getenv('GMAIL_ADDRESS', '—')}\n"
-        f"Interval: každých {CHECK_INTERVAL // 60} min\n\n"
-        f"Reaguji na:\n"
-        f"• Dotaz na produkt (type_a)\n"
-        f"• Dotaz na stav objednávky (type_b)\n\n"
-        f"Příkazy: /check, /yes, /no"
+        f"🤖 E-mailový agent spuštěn — {mode}\n"
+        f"📧 {os.getenv('GMAIL_ADDRESS', '—')}\n"
+        f"⏱ Check každých {CHECK_INTERVAL // 60} min\n\n"
+        f"Zpracovávám:\n"
+        f"  A1 stav objednávky\n"
+        f"  A2 vrácení zboží\n"
+        f"  A3 reklamace (klidná)\n"
+        f"  B1 dotaz na produkt\n"
+        f"  B2 odborný/zdravotní dotaz\n\n"
+        f"  🚨 ESC → notifikace, bez auto-reply\n"
+        f"  ⚪ UNK → zalogováno, bez akce\n\n"
+        f"Příkazy: /check · /yes · /no"
     )
     await context.bot.send_message(chat_id=chat_id, text=text)
 

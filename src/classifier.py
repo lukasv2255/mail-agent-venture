@@ -8,7 +8,9 @@ from openai import OpenAI
 
 logger = logging.getLogger(__name__)
 
-UNKNOWN_TYPE = "unknown"
+UNKNOWN_TYPE = "UNK"
+ESCALATION_TYPE = "ESC"
+AUTO_REPLY_TYPES = {"A1", "A2", "A3", "B1", "B2"}
 client = None
 
 
@@ -51,6 +53,6 @@ def classify_email(email):
         ],
     )
 
-    result = response.choices[0].message.content.strip().lower()
+    result = response.choices[0].message.content.strip().upper()
     logger.info(f"Klasifikace emailu '{email['subject']}': {result}")
     return result

@@ -16,7 +16,7 @@ chtěl bych se zeptat, kdy dorazí moje objednávka číslo 4471.
 Děkuji, Jan Novák
 ```
 
-**Očekávaný výsledek:** Agent odpoví se stavem "odesláno" a tracking číslem CZ847392011.
+**Klasifikace:** A1 | **Očekávaný výsledek:** Agent odpoví se stavem "odesláno" a tracking číslem CZ847392011.
 
 ---
 
@@ -31,7 +31,7 @@ objednala jsem kreatin, objednávka č. 2280. Ještě jsem nedostala žádnou in
 Eva Kovářová
 ```
 
-**Očekávaný výsledek:** Agent odpoví "v přípravě, expedice do 2 dnů".
+**Klasifikace:** A1 | **Očekávaný výsledek:** Agent odpoví "v přípravě, expedice do 2 dnů".
 
 ---
 
@@ -45,7 +45,7 @@ Dobrý den,
 zajímá mě Whey Protein Vanilka. Kolik obsahuje bílkovin na porci a je vhodný pro vegetariány?
 ```
 
-**Očekávaný výsledek:** Agent odpoví z KB — 24g bílkovin, zmíní že je ze syrovátky (živočišný původ).
+**Klasifikace:** B1 | **Očekávaný výsledek:** Agent odpoví z KB — 24g bílkovin, zmíní že je ze syrovátky (živočišný původ).
 
 ---
 
@@ -59,7 +59,7 @@ Dobrý den,
 mám diabetes 2. typu a rád bych začal užívat váš protein. Je to bezpečné?
 ```
 
-**Očekávaný výsledek:** Agent neodpoví s jistotou — doporučí konzultaci s lékařem. Nebo požádá klienta o doplnění.
+**Klasifikace:** B2 | **Očekávaný výsledek:** Agent odpoví opatrně — doporučí konzultaci s lékařem, nesděluje konkrétní zdravotní rady.
 
 ---
 
@@ -75,7 +75,7 @@ Jak mám postupovat?
 Jan Novák
 ```
 
-**Očekávaný výsledek:** Agent pošle instrukce k vrácení — zabalit, přiložit formulář, zaslat na adresu.
+**Klasifikace:** A2 | **Očekávaný výsledek:** Agent pošle instrukce k vrácení — zabalit, přiložit formulář, zaslat na adresu.
 
 ---
 
@@ -91,7 +91,7 @@ Toto je nepřijatelné, chci okamžitě náhradu nebo vrácení peněz.
 Jana Nováková
 ```
 
-**Očekávaný výsledek:** Agent eskaluje (klíčová slova: "nepřijatelné", "reklamace"). Telegram upozornění pro klienta.
+**Klasifikace:** ESC | **Očekávaný výsledek:** Agent NE-odpovídá, pošle Telegram upozornění s textem emailu — klíčová slova: "nepřijatelné", emoce + reklamace.
 
 ---
 
@@ -104,7 +104,7 @@ Jana Nováková
 Dobrý den, kdy dorazí objednávka číslo 9999?
 ```
 
-**Očekávaný výsledek:** Agent odpoví že objednávku nenašel, požádá zákazníka o ověření čísla.
+**Klasifikace:** A1 | **Očekávaný výsledek:** Agent odpoví že objednávku nenašel, požádá zákazníka o ověření čísla.
 
 ---
 
@@ -117,7 +117,7 @@ Dobrý den, kdy dorazí objednávka číslo 9999?
 Dobrý den, nabízíme reklamní plochy na fitness portálech. Máte zájem o spolupráci?
 ```
 
-**Očekávaný výsledek:** Agent klasifikuje jako `unknown`, nereaguje zákazníkovi, pouze zaloguje.
+**Klasifikace:** UNK | **Očekávaný výsledek:** Agent klasifikuje jako UNK, nereaguje zákazníkovi, pouze zaloguje.
 
 ---
 

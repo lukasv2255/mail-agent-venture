@@ -64,6 +64,37 @@ struktury, decisions a key facts, ne jen do samostatného dokumentu.
 
 ---
 
+## 2026-04-16 — Správný formát testovacího emailu přes Gmail API
+
+**Situace:** Testovací email dorazil bez subject — agent klasifikoval jako `unknown` a přeskočil.
+
+**Chyba:** Nastaven `msg['from']` header — Gmail ho přepisuje a při tom rozhází ostatní headery, subject se ztratí.
+
+**Správně:**
+
+```python
+msg = MIMEText('tělo', 'plain', 'utf-8')
+msg['to'] = 'newagent7878@gmail.com'
+msg['subject'] = 'Předmět'
+# NENASTAVUJ msg['from'] — Gmail ho přepíše a ztratí se subject
+raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
+service.users().messages().send(userId='me', body={'raw': raw}).execute()
+```
+
+**Pravidlo:** Používej `EmailMessage` (ne `MIMEText`) — `MIMEText` generuje lowercase `subject:` header který Gmail ignoruje → subject se ztratí.
+
+```python
+from email.message import EmailMessage
+msg = EmailMessage()
+msg['To'] = 'newagent7878@gmail.com'
+msg['Subject'] = 'Předmět'
+msg.set_content('Tělo emailu')
+raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
+service.users().messages().send(userId='me', body={'raw': raw}).execute()
+```
+
+---
+
 ## Šablona záznamu
 
 ```markdown
