@@ -17,6 +17,18 @@
 
 ---
 
+## 2026-04-16 — Telegram handler nesmí blokovat event loop
+
+**Situace:** `/yes` nereagoval — agent čekal na Future ale handlery se nespustily.
+
+**Chyba:** `await run_check()` přímo v handleru blokuje celý event loop dokud check neskončí.
+
+**Správně:** `asyncio.create_task(run_check())` — check běží na pozadí, handlery fungují normálně.
+
+**Pravidlo:** Jakákoliv dlouho běžící async operace v Telegram handleru = `create_task`, ne `await`.
+
+---
+
 ## Obecné principy práce s Tommym
 
 - Tommy se **učí**, nejen kopíruje — vždy vysvětli proč, nejen co

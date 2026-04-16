@@ -21,6 +21,25 @@
 
 ---
 
+## 2026-04-16 — /yes a /no nereagují po /check
+
+**Symptom:** Agent pošle návrh odpovědi do Telegramu a čeká na `/yes`, ale příkaz je ignorován.
+
+**Root cause:** `run_check()` bylo voláno jako `await` přímo v handleru — blokovalo event loop. `wait_for_approval()` drželo coroutine, ale Telegram handlery (`cmd_yes`, `cmd_no`) se nemohly spustit dokud `run_check` neskončil.
+
+**Řešení:** Spustit check jako background task:
+
+```python
+# bylo:
+await run_check(context.bot)
+# opraveno na:
+asyncio.create_task(run_check(context.bot))
+```
+
+**Prevence:** Každá dlouho běžící operace spuštěná z Telegram handleru musí být `create_task` — jinak Telegram přestane reagovat na příkazy.
+
+---
+
 ## 2026-04-16 — Gmail token vyprší mezi sezeními
 
 **Symptom:** Agent při spuštění selže na Gmail API — token je neplatný nebo vypršel.
