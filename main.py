@@ -18,7 +18,8 @@ from telegram.ext import Application, CommandHandler, ContextTypes
 from src.mail_client import get_unprocessed_emails, mark_as_processed, send_reply
 from src.classifier import classify_email, UNKNOWN_TYPE, ESCALATION_TYPE, AUTO_REPLY_TYPES
 from src.responder import generate_reply
-from src.notifier import send_approval_request, wait_for_approval, resolve_approval
+from src.notifier import send_approval_request, wait_for_approval, resolve_approval, set_queue_remaining, add_alert, set_unpin_callback
+from src.dashboard import start_dashboard, set_check_callback
 
 os.makedirs("logs", exist_ok=True)
 logging.basicConfig(
@@ -68,6 +69,7 @@ async def process_email(bot, email):
             )
         )
         await bot.pin_chat_message(chat_id=chat_id, message_id=msg.message_id, disable_notification=True)
+        add_alert(email, "UNK", message_id=msg.message_id)
         return
 
     if email_type == ESCALATION_TYPE:
@@ -83,6 +85,7 @@ async def process_email(bot, email):
             )
         )
         await bot.pin_chat_message(chat_id=chat_id, message_id=msg.message_id, disable_notification=True)
+        add_alert(email, "ESC", message_id=msg.message_id)
         mark_as_processed(email["id"])
         return
 
@@ -140,11 +143,13 @@ async def run_check(bot):
             )
             return
 
-        for email in emails:
+        for i, email in enumerate(emails):
+            set_queue_remaining(len(emails) - i - 1)
             try:
                 await process_email(bot, email)
             except Exception as e:
                 logger.error(f"Chyba při zpracování emailu {email['id']}: {e}", exc_info=True)
+        set_queue_remaining(0)
 
 
 # --- Telegram command handlery ---
@@ -195,8 +200,15 @@ async def send_startup_message(context: ContextTypes.DEFAULT_TYPE):
 # --- Start ---
 
 def main():
+    start_dashboard()
+
     token = os.getenv("TELEGRAM_BOT_TOKEN")
     app = Application.builder().token(token).build()
+
+    # Dashboard potřebuje bot instanci pro run_check a unpin
+    set_check_callback(lambda: run_check(app.bot))
+    chat_id = os.getenv("TELEGRAM_CHAT_ID")
+    set_unpin_callback(lambda msg_id: app.bot.unpin_chat_message(chat_id=chat_id, message_id=msg_id))
 
     app.add_handler(CommandHandler("check", cmd_check))
     app.add_handler(CommandHandler("yes", cmd_yes))

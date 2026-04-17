@@ -15,6 +15,24 @@ _pending_approval: Optional[asyncio.Future] = None
 # Stav aktuálně čekajícího emailu — čte dashboard
 _pending_item: Optional[dict] = None  # {"email": ..., "email_type": ..., "draft": ...}
 
+# Počet emailů čekajících ve frontě (zpracovány budou po aktuálním)
+_queue_remaining: int = 0
+
+# ESC a UNK emaily pro zobrazení na dashboardu (nevyžadují schválení)
+_alerts: list = []
+
+# Callback pro odepnutí Telegram zprávy při dismissu alertu
+_unpin_callback = None
+
+
+def set_unpin_callback(fn):
+    global _unpin_callback
+    _unpin_callback = fn
+
+
+def get_unpin_callback():
+    return _unpin_callback
+
 
 def set_pending_approval(future: asyncio.Future):
     global _pending_approval
@@ -28,6 +46,38 @@ def set_pending_item(item: Optional[dict]):
 
 def get_pending_item() -> Optional[dict]:
     return _pending_item
+
+
+def set_queue_remaining(count: int):
+    global _queue_remaining
+    _queue_remaining = count
+
+
+def get_queue_remaining() -> int:
+    return _queue_remaining
+
+
+def add_alert(email: dict, email_type: str, message_id: int = None):
+    """Přidá ESC nebo UNK email do seznamu alertů pro dashboard."""
+    global _alerts
+    _alerts.append({
+        "from": email["from"],
+        "subject": email["subject"],
+        "body": email["body"][:300],
+        "email_type": email_type,
+        "message_id": message_id,
+    })
+
+
+def get_alerts() -> list:
+    return list(_alerts)
+
+
+def clear_alert(index: int):
+    """Odstraní alert po potvrzení na dashboardu."""
+    global _alerts
+    if 0 <= index < len(_alerts):
+        _alerts.pop(index)
 
 
 async def send_approval_request(bot, email, email_type, draft_reply):
@@ -74,5 +124,6 @@ async def wait_for_approval(bot, timeout_seconds=3600):
 async def resolve_approval(approved: bool):
     """Zavolá se z /yes nebo /no handleru."""
     global _pending_approval
+    set_pending_item(None)  # Okamžitě vymaž z dashboardu
     if _pending_approval and not _pending_approval.done():
         _pending_approval.set_result(approved)
