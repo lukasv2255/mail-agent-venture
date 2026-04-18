@@ -95,6 +95,21 @@ service.users().messages().send(userId='me', body={'raw': raw}).execute()
 
 ---
 
+## 2026-04-17 — Dashboard: ESC/UNK dismiss odepíná Telegram, polling bez probliknutí
+
+**Situace:** Dashboard zobrazoval probliknutí "📭" mezi zpracováním emailů, ESC/UNK neodpínalo Telegram, a stav "žádný email" byl matoucí.
+
+**Řešení:**
+
+- **ESC/UNK dismiss → unpin Telegram:** `message_id` se ukládá do alertu při vzniku, tlačítko "Vyřízeno" volá unpin callback přes `message_id`. Pattern: alert obsahuje `telegram_message_id`.
+- **\_isPolling flag:** Zabrání přepsání karty na "📭" v mezeře mezi HTTP polling cykly — flag se nastaví před fetchem, odstraní po dokončení celého cyklu.
+- **Vždy "⏳ Čekám na další email...":** Odstraněn stav "📭 Žádný email nečeká" — agent běží ve smyčce pořád, takže karta vždy ukazuje čekání.
+- **Tlačítko "🔍 Check now":** Lupa je v HTML i JS takže přežije každý refresh.
+
+**Pravidlo:** Emoji v tlačítkách a stavových kartách vždy definuj v HTML i v JS renderovací logice — jinak se po refresh ztratí.
+
+---
+
 ## Šablona záznamu
 
 ```markdown

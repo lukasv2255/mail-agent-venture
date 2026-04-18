@@ -10,10 +10,17 @@
 
 ### Kód
 
-- `main.py` — vstupní bod, Telegram bot, scheduling
+- `main.py` — vstupní bod, Telegram bot, scheduling, načítání modulů
 - `src/classifier.py` — klasifikace typu e-mailu
-- `src/responder.py` — generování odpovědi přes AI
 - `src/notifier.py` — schvalovací kanál (výchozí: Telegram)
+
+**Moduly — zapínat/vypínat per klient přes env proměnné:**
+
+| Soubor                      | Env                      | Funkce                                       |
+| --------------------------- | ------------------------ | -------------------------------------------- |
+| `src/modules/responder.py`  | `MODULE_RESPONDER=true`  | Automatické odpovědi na příchozí emaily      |
+| `src/modules/sorter.py`     | `MODULE_SORTER=true`     | Třídění inboxu — obchodní nabídky vs. zbytek |
+| `src/modules/newsletter.py` | `MODULE_NEWSLETTER=true` | Tvorba a rozesílání newsletterů (TODO)       |
 
 **Mail client — vybrat podle poskytovatele klienta:**
 
@@ -22,11 +29,7 @@
 - `src/mail_client_graph.py` — Outlook / Office 365 (Microsoft Graph API)
 - `src/mail_client_helpdesk.py` — Zendesk nebo Freshdesk (tiketovací systém)
 
-Všechny čtyři implementují stejné rozhraní — v `main.py` stačí změnit jeden import:
-
-```python
-from src.mail_client_imap import get_unprocessed_emails, mark_as_processed, send_reply
-```
+Přepínání přes env: `MAIL_CLIENT=imap` — žádná změna kódu.
 
 ### Provozní standard
 

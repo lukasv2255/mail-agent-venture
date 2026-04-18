@@ -2,9 +2,15 @@
 E-mailový agent — hlavní vstupní bod.
 
 Spuštění:
-  python main.py    # spustí agenta s Telegram botem a schedulingem
+  python main.py
+
+Aktivní moduly se konfigurují per-modul boolean proměnnými:
+  MODULE_RESPONDER=true       # automatické odpovědi (výchozí: true)
+  MODULE_SORTER=true          # třídění inboxu (výchozí: true)
+  MODULE_NEWSLETTER=false     # tvorba newsletterů (výchozí: false)
 """
 import asyncio
+import importlib
 import logging
 import os
 
@@ -15,10 +21,8 @@ load_dotenv()
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
-from src.mail_client import get_unprocessed_emails, mark_as_processed, send_reply
-from src.classifier import classify_email, UNKNOWN_TYPE, ESCALATION_TYPE, AUTO_REPLY_TYPES
-from src.responder import generate_reply
-from src.notifier import send_approval_request, wait_for_approval, resolve_approval, set_queue_remaining, add_alert, set_unpin_callback
+from src.mail_client import get_unprocessed_emails, mark_as_processed
+from src.notifier import set_queue_remaining
 from src.dashboard import start_dashboard, set_check_callback
 
 os.makedirs("logs", exist_ok=True)
@@ -32,7 +36,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-DRY_RUN = os.getenv("DRY_RUN", "true").lower() == "true"
 CHECK_INTERVAL = int(os.getenv("CHECK_INTERVAL_MINUTES", "60")) * 60
 
 MAIL_CLIENT = os.getenv("MAIL_CLIENT", "gmail")
@@ -43,98 +46,62 @@ MAIL_ADDRESS = {
     "helpdesk": os.getenv("HELPDESK_EMAIL", "—"),
 }.get(MAIL_CLIENT, "—")
 
-# Zámek aby nespustily dva checy najednou
 _check_lock = asyncio.Lock()
 
 
-async def process_email(bot, email):
-    """Zpracuje jeden email: klasifikace → generování → potvrzení → odeslání."""
-    logger.info(f"Zpracovávám: '{email['subject']}' od {email['from']}")
-
-    # Označit hned — zabrání dvojímu zpracování i kdyby byl email v threadu s reply
-    mark_as_processed(email["id"])
-
-    email_type = classify_email(email)
-
-    if email_type == UNKNOWN_TYPE:
-        logger.info("Neznámý typ — přeskakuji.")
-        chat_id = os.getenv("TELEGRAM_CHAT_ID")
-        msg = await bot.send_message(
-            chat_id=chat_id,
-            text=(
-                f"⚪ Nezpracováno (UNK)\n"
-                f"Od: {email['from']}\n"
-                f"Předmět: {email['subject']}\n\n"
-                f"{email['body'][:300]}"
-            )
-        )
-        await bot.pin_chat_message(chat_id=chat_id, message_id=msg.message_id, disable_notification=True)
-        add_alert(email, "UNK", message_id=msg.message_id)
-        return
-
-    if email_type == ESCALATION_TYPE:
-        logger.info("Eskalace — notifikuji člověka.")
-        chat_id = os.getenv("TELEGRAM_CHAT_ID")
-        msg = await bot.send_message(
-            chat_id=chat_id,
-            text=(
-                f"🚨 Eskalace — vyžaduje lidskou reakci\n"
-                f"Od: {email['from']}\n"
-                f"Předmět: {email['subject']}\n\n"
-                f"{email['body'][:300]}"
-            )
-        )
-        await bot.pin_chat_message(chat_id=chat_id, message_id=msg.message_id, disable_notification=True)
-        add_alert(email, "ESC", message_id=msg.message_id)
-        mark_as_processed(email["id"])
-        return
-
-    if email_type not in AUTO_REPLY_TYPES:
-        logger.info(f"Neznámý typ '{email_type}' — přeskakuji.")
-        mark_as_processed(email["id"])
-        return
-
-    draft = generate_reply(email, email_type)
-
-    if DRY_RUN:
-        logger.info(f"[DRY RUN] Draft odpovědi:\n{draft}\n---")
-        mark_as_processed(email["id"])
-        return
-
-    await send_approval_request(bot, email, email_type, draft)
-    approved = await wait_for_approval(bot)
-
-    if approved is None:
-        # Timeout — email zůstane nezpracovaný, zpracuje se při příštím /check
-        logger.info("Timeout — email vrácen do fronty.")
-        return
-    elif approved:
-        await bot.send_message(
-            chat_id=os.getenv("TELEGRAM_CHAT_ID"),
-            text="👍 Odesílám..."
-        )
-        send_reply(email, draft)
-        logger.info("Email odeslán.")
-        await bot.send_message(
-            chat_id=os.getenv("TELEGRAM_CHAT_ID"),
-            text="✅ Email byl odeslán."
-        )
-    else:
-        logger.info("Email zamítnut.")
-        await bot.send_message(
-            chat_id=os.getenv("TELEGRAM_CHAT_ID"),
-            text="❌ Email přeskočen."
-        )
-
-    mark_as_processed(email["id"])
+AVAILABLE_MODULES = ["responder", "sorter", "newsletter"]
 
 
-async def run_check(bot):
-    """Zkontroluje nové emaily. Používá zámek aby nešly dva checy najednou."""
+def load_modules() -> list:
+    """
+    Načte aktivní moduly podle per-modul boolean env proměnných.
+
+    MODULE_RESPONDER=true    # automatické odpovědi
+    MODULE_SORTER=true       # třídění inboxu
+    MODULE_NEWSLETTER=false  # tvorba newsletterů (výchozí: vypnuto)
+    """
+    modules = []
+    for name in AVAILABLE_MODULES:
+        env_key = f"MODULE_{name.upper()}"
+        # responder a sorter zapnuty výchozně, newsletter vypnut
+        default = "false" if name == "newsletter" else "true"
+        enabled = os.getenv(env_key, default).lower() == "true"
+        if not enabled:
+            continue
+        try:
+            mod = importlib.import_module(f"src.modules.{name}")
+            modules.append((name, mod))
+            logger.info(f"Modul načten: {name}")
+        except ImportError as e:
+            logger.error(f"Nelze načíst modul '{name}': {e}")
+    return modules
+
+
+async def run_check(bot, modules: list):
+    """
+    Zkontroluje nové emaily a spustí každý aktivní modul.
+
+    Moduly se dvěma možnými rozhraními:
+      run_check(bot)    — modul má vlastní IMAP cyklus (např. sorter)
+      run(bot, email)   — modul zpracovává emaily jeden po druhém (např. responder)
+    """
     async with _check_lock:
-        logger.info("Spouštím check nových emailů...")
-        emails = get_unprocessed_emails()
+        logger.info("Spouštím check...")
 
+        # Moduly s vlastním cyklem (run_check)
+        for name, mod in modules:
+            if hasattr(mod, "run_check"):
+                try:
+                    await mod.run_check(bot)
+                except Exception as e:
+                    logger.error(f"Chyba v modulu '{name}' (run_check): {e}", exc_info=True)
+
+        # Moduly zpracovávající emaily per-email (run)
+        per_email_modules = [(name, mod) for name, mod in modules if hasattr(mod, "run") and not hasattr(mod, "run_check")]
+        if not per_email_modules:
+            return
+
+        emails = get_unprocessed_emails()
         if not emails:
             logger.info("Žádné nové emaily.")
             await bot.send_message(
@@ -145,59 +112,43 @@ async def run_check(bot):
 
         for i, email in enumerate(emails):
             set_queue_remaining(len(emails) - i - 1)
-            try:
-                await process_email(bot, email)
-            except Exception as e:
-                logger.error(f"Chyba při zpracování emailu {email['id']}: {e}", exc_info=True)
+            for name, mod in per_email_modules:
+                try:
+                    await mod.run(bot, email)
+                except Exception as e:
+                    logger.error(f"Chyba v modulu '{name}' při zpracování emailu {email['id']}: {e}", exc_info=True)
+
         set_queue_remaining(0)
 
-
-# --- Telegram command handlery ---
 
 async def cmd_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """/check — okamžitý check emailů."""
     await update.message.reply_text("🔍 Spouštím check emailů...")
-    asyncio.create_task(run_check(context.bot))
-
-
-async def cmd_yes(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """/yes — schválí čekající odpověď."""
-    await resolve_approval(True)
-
-
-async def cmd_no(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """/no — zamítne čekající odpověď."""
-    await resolve_approval(False)
-    await update.message.reply_text("👎 Přeskočeno.")
+    asyncio.create_task(run_check(context.bot, context.bot_data["modules"]))
 
 
 async def scheduled_check(context: ContextTypes.DEFAULT_TYPE):
     """Automatický check spouštěný JobQueue."""
-    await run_check(context.bot)
+    await run_check(context.bot, context.bot_data["modules"])
 
 
 async def send_startup_message(context: ContextTypes.DEFAULT_TYPE):
     """Pošle uvítací zprávu při startu agenta."""
     chat_id = os.getenv("TELEGRAM_CHAT_ID")
-    mode = "🔇 DRY RUN" if DRY_RUN else "🟢 PRODUKCE"
+    modules = context.bot_data["modules"]
+    module_names = ", ".join(name for name, _ in modules)
+    has_responder = any(name == "responder" for name, _ in modules)
+    has_newsletter = any(name == "newsletter" for name, _ in modules)
     text = (
-        f"🤖 E-mailový agent spuštěn — {mode}\n"
+        f"🤖 E-mailový agent spuštěn\n"
         f"📧 {MAIL_ADDRESS} ({MAIL_CLIENT})\n"
-        f"⏱ Check každých {CHECK_INTERVAL // 60} min\n\n"
-        f"Zpracovávám:\n"
-        f"  A1 stav objednávky\n"
-        f"  A2 vrácení zboží\n"
-        f"  A3 reklamace (klidná)\n"
-        f"  B1 dotaz na produkt\n"
-        f"  B2 odborný/zdravotní dotaz\n\n"
-        f"  🚨 ESC → notifikace, bez auto-reply\n"
-        f"  ⚪ UNK → zalogováno, bez akce\n\n"
-        f"Příkazy: /check · /yes · /no"
+        f"⚙ Moduly: {module_names}\n"
+        + (f"⏱ Check každých {CHECK_INTERVAL // 60} min\n" if has_responder else "")
+        + f"\nPříkazy: /check"
+        + (" | /newsletter" if has_newsletter else "")
     )
     await context.bot.send_message(chat_id=chat_id, text=text)
 
-
-# --- Start ---
 
 def main():
     start_dashboard()
@@ -205,23 +156,23 @@ def main():
     token = os.getenv("TELEGRAM_BOT_TOKEN")
     app = Application.builder().token(token).build()
 
-    # Dashboard potřebuje bot instanci pro run_check a unpin
-    set_check_callback(lambda: run_check(app.bot))
-    chat_id = os.getenv("TELEGRAM_CHAT_ID")
-    set_unpin_callback(lambda msg_id: app.bot.unpin_chat_message(chat_id=chat_id, message_id=msg_id))
+    # Načíst moduly
+    modules = load_modules()
+    app.bot_data["modules"] = modules
 
+    # Každý modul zaregistruje své handlery
+    for name, mod in modules:
+        mod.setup(app)
+
+    # Globální /check handler
     app.add_handler(CommandHandler("check", cmd_check))
-    app.add_handler(CommandHandler("yes", cmd_yes))
-    app.add_handler(CommandHandler("no", cmd_no))
 
-    # Uvítací zpráva při startu
+    set_check_callback(lambda: run_check(app.bot, modules))
+
     app.job_queue.run_once(send_startup_message, when=5)
-
-    # Plánovaný check každých N minut
     app.job_queue.run_repeating(scheduled_check, interval=CHECK_INTERVAL, first=10)
 
-    logger.info(f"Agent spuštěn. Interval: {CHECK_INTERVAL // 60} min. DRY_RUN={DRY_RUN}")
-    logger.info("Příkazy: /check, /yes, /no")
+    logger.info(f"Agent spuštěn. Moduly: {[n for n, _ in modules]}. Interval: {CHECK_INTERVAL // 60} min.")
 
     app.run_polling()
 
