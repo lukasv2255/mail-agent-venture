@@ -103,6 +103,21 @@ Aktuálně: ESC email se označí jako zpracovaný, ale klient nedostane žádno
 
 ---
 
+## 2026-04-20 — Periodická kontrola nesprávně označených emailů
+
+### Plán
+
+- [ ] Jednou za X hodin projít všechny emaily ve složce `others` (SEEN) a ověřit zda nebyly omylem přesunuty/označeny
+- [ ] Emaily které vypadají jako zákaznické dotazy (ne B2B/spam) reportovat jako ESC do Telegramu
+- [ ] Nabídnout odeslání odpovědi: "⚠ Tento email mohl být přeskočen omylem. Chceš odpovědět?"
+
+### Kontext
+
+Sorter může omylem označit jako SEEN nebo přesunout zákaznický email (např. reklamaci).
+Zákazník pak čeká bez odpovědi. Periodická kontrola je záchranná síť.
+
+---
+
 ## 2026-04-16 — Sekvenční fronta schválení (Komplikace č. 4)
 
 ### Plán

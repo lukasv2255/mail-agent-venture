@@ -36,8 +36,8 @@ def get_unprocessed_emails() -> list[dict]:
     return _get_provider().get_unprocessed_emails()
 
 
-def mark_as_processed(email_id: str):
-    _get_provider().mark_as_processed(email_id)
+def mark_as_processed(email_id: str, folder: str = None):
+    _get_provider().mark_as_processed(email_id, folder=folder)
 
 
 def send_reply(email: dict, text: str):

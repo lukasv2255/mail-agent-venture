@@ -35,8 +35,10 @@ IMAP_PASSWORD = os.getenv("IMAP_PASSWORD", "")
 SMTP_HOST = os.getenv("SMTP_HOST", "")
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 
-# IMAP flag pro označení zpracovaných emailů
-PROCESSED_FLAG = "agent-processed"
+PROCESSED_FOLDER = os.getenv("IMAP_PROCESSED_FOLDER", "agent-processed")
+
+# Složky které agent prohledává — oddělené čárkou, např. "INBOX,Ostatní"
+_INBOX_FOLDERS = [f.strip() for f in os.getenv("IMAP_INBOX_FOLDERS", "INBOX").split(",")]
 
 
 def _connect() -> imaplib.IMAP4_SSL:
@@ -45,41 +47,61 @@ def _connect() -> imaplib.IMAP4_SSL:
     return conn
 
 
-def get_unprocessed_emails() -> list[dict]:
-    """Vrátí emaily z inboxu bez custom flagu PROCESSED_FLAG."""
-    conn = _connect()
-    conn.select("INBOX")
+def _ensure_folder(conn: imaplib.IMAP4_SSL, folder: str):
+    """Vytvoří složku pokud neexistuje."""
+    result = conn.list('""', folder)
+    exists = result[1] and result[1][0] is not None and folder.encode() in result[1][0]
+    if not exists:
+        conn.create(folder)
+        logger.info(f"Vytvořena IMAP složka: {folder}")
 
-    _, data = conn.search(None, "UNSEEN")
-    email_ids = data[0].split()
+
+def get_unprocessed_emails() -> list[dict]:
+    """Vrátí všechny emaily ze sledovaných složek (IMAP_INBOX_FOLDERS)."""
+    conn = _connect()
 
     emails = []
-    for eid in email_ids:
-        _, msg_data = conn.fetch(eid, "(RFC822)")
-        raw = msg_data[0][1]
-        msg = email.message_from_bytes(raw)
-        emails.append({
-            "id": eid.decode(),
-            "thread_id": msg.get("Message-ID", ""),
-            "from": _decode_header(msg.get("From", "")),
-            "to": _decode_header(msg.get("To", "")),
-            "subject": _decode_header(msg.get("Subject", "")),
-            "date": msg.get("Date", ""),
-            "body": _extract_body(msg),
-        })
+    for folder in _INBOX_FOLDERS:
+        result, _ = conn.select(folder)
+        if result != "OK":
+            logger.warning(f"Složka '{folder}' neexistuje nebo není přístupná.")
+            continue
+
+        _, data = conn.uid("SEARCH", None, "ALL")
+        uids = data[0].split()
+
+        for uid in uids:
+            _, msg_data = conn.uid("FETCH", uid, "(RFC822)")
+            raw = msg_data[0][1]
+            msg = email.message_from_bytes(raw)
+            emails.append({
+                "id": uid.decode(),
+                "folder": folder,
+                "thread_id": msg.get("Message-ID", ""),
+                "from": _decode_header(msg.get("From", "")),
+                "to": _decode_header(msg.get("To", "")),
+                "subject": _decode_header(msg.get("Subject", "")),
+                "date": msg.get("Date", ""),
+                "body": _extract_body(msg),
+            })
 
     conn.logout()
-    logger.info(f"Nalezeno {len(emails)} nezpracovaných emailů (IMAP).")
+    logger.info(f"Nalezeno {len(emails)} nezpracovaných emailů (IMAP, složky: {_INBOX_FOLDERS}).")
     return emails
 
 
-def mark_as_processed(email_id: str):
-    """Označí email jako přečtený (SEEN). Alternativa: přesunout do složky."""
+def mark_as_processed(email_id: str, folder: str = None, source_folder: str = "INBOX"):
+    """Přesune email do zadané složky (default: PROCESSED_FOLDER)."""
+    target = folder or PROCESSED_FOLDER
     conn = _connect()
-    conn.select("INBOX")
-    conn.store(email_id.encode(), "+FLAGS", "\\Seen")
+    _ensure_folder(conn, target)
+    conn.select(source_folder)
+    # UID COPY/STORE — stabilní i po smazání předchozích zpráv
+    conn.uid("COPY", email_id.encode(), target)
+    conn.uid("STORE", email_id.encode(), "+FLAGS", "\\Deleted")
+    conn.expunge()
     conn.logout()
-    logger.debug(f"Email {email_id} označen jako zpracovaný (IMAP).")
+    logger.debug(f"Email UID {email_id} přesunut z '{source_folder}' do '{target}'.")
 
 
 def send_reply(email_data: dict, text: str):
@@ -117,5 +139,10 @@ def _extract_body(msg) -> str:
     if msg.is_multipart():
         for part in msg.walk():
             if part.get_content_type() == "text/plain":
-                return part.get_payload(decode=True).decode("utf-8", errors="replace")
-    return msg.get_payload(decode=True).decode("utf-8", errors="replace")
+                payload = part.get_payload(decode=True)
+                if payload:
+                    return payload.decode("utf-8", errors="replace")
+    payload = msg.get_payload(decode=True)
+    if payload:
+        return payload.decode("utf-8", errors="replace")
+    return ""

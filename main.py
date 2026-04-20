@@ -46,7 +46,7 @@ MAIL_ADDRESS = {
     "helpdesk": os.getenv("HELPDESK_EMAIL", "—"),
 }.get(MAIL_CLIENT, "—")
 
-_check_lock = asyncio.Lock()
+_check_lock = None
 
 
 AVAILABLE_MODULES = ["responder", "sorter", "newsletter"]
@@ -85,6 +85,9 @@ async def run_check(bot, modules: list):
       run_check(bot)    — modul má vlastní IMAP cyklus (např. sorter)
       run(bot, email)   — modul zpracovává emaily jeden po druhém (např. responder)
     """
+    global _check_lock
+    if _check_lock is None:
+        _check_lock = asyncio.Lock()
     async with _check_lock:
         logger.info("Spouštím check...")
 
@@ -158,10 +161,15 @@ def main():
     start_dashboard()
 
     token = os.getenv("TELEGRAM_BOT_TOKEN")
-    app = Application.builder().token(token).build()
 
-    # Načíst moduly
     modules = load_modules()
+
+    async def post_init(application):
+        # Zaregistruje callback až uvnitř správného event loop
+        set_check_callback(lambda: run_check(application.bot, modules))
+
+    app = Application.builder().token(token).post_init(post_init).build()
+
     app.bot_data["modules"] = modules
 
     # Každý modul zaregistruje své handlery
@@ -170,8 +178,6 @@ def main():
 
     # Globální /check handler
     app.add_handler(CommandHandler("check", cmd_check))
-
-    set_check_callback(lambda: run_check(app.bot, modules))
 
     app.job_queue.run_once(send_startup_message, when=5)
     app.job_queue.run_repeating(scheduled_check, interval=CHECK_INTERVAL, first=10)

@@ -5,6 +5,18 @@
 
 ---
 
+## 2026-04-20 — Sorter označuje emaily jako SEEN, responder je pak nenajde
+
+**Situace:** Sorter a responder běžely zároveň na stejném IMAP inboxu. Sorter fetchoval emaily přes imapclient — seznam.cz ignoruje `BODY.PEEK[]` a označí emaily jako SEEN. Responder hledá UNSEEN → nenajde nic.
+
+**Chyba:** Sorter a responder jsou pro různé projekty, nesmí běžet najednou na stejném inboxu.
+
+**Správně:** `MODULE_SORTER=false` při testování responderu. Při testování sorteru `MODULE_RESPONDER=false`.
+
+**Pravidlo:** Sorter = B2B třídění (inbox management). Responder = zákaznické dotazy (auto-reply). Nikdy oba najednou na stejném inboxu.
+
+---
+
 ## 2026-04-18 — Railway `variable list` zkracuje hodnoty — nepoužívat pro kopírování tokenů
 
 **Situace:** Při kopírování env proměnných z Railway CLI (`railway variable list`) do nového projektu byl TELEGRAM_BOT_TOKEN zkrácen v zobrazení → token byl neplatný → app spadla.

@@ -37,14 +37,18 @@ def setup(app):
     logger.info("Modul responder: inicializován.")
 
 
+FOLDER_UNKNOWN = os.getenv("RESPONDER_UNKNOWN", "agent-unknown")
+FOLDER_ESCALATED = os.getenv("RESPONDER_ESCALATED", "agent-escalated")
+
+
 async def run(bot, email):
     """Zpracuje jeden email."""
     logger.info(f"[responder] Zpracovávám: '{email['subject']}' od {email['from']}")
-    mark_as_processed(email["id"])
 
     email_type = classify_email(email)
 
     if email_type == UNKNOWN_TYPE:
+        mark_as_processed(email["id"], folder=FOLDER_UNKNOWN)
         chat_id = os.getenv("TELEGRAM_CHAT_ID")
         msg = await bot.send_message(
             chat_id=chat_id,
@@ -60,6 +64,7 @@ async def run(bot, email):
         return
 
     if email_type == ESCALATION_TYPE:
+        mark_as_processed(email["id"], folder=FOLDER_ESCALATED)
         chat_id = os.getenv("TELEGRAM_CHAT_ID")
         msg = await bot.send_message(
             chat_id=chat_id,
@@ -73,6 +78,8 @@ async def run(bot, email):
         await bot.pin_chat_message(chat_id=chat_id, message_id=msg.message_id, disable_notification=True)
         add_alert(email, "ESC", message_id=msg.message_id)
         return
+
+    mark_as_processed(email["id"])
 
     if email_type not in AUTO_REPLY_TYPES:
         logger.info(f"[responder] Neznámý typ '{email_type}' — přeskakuji.")

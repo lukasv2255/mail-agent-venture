@@ -35,7 +35,7 @@ _main_loop = None
 def set_check_callback(fn):
     global _check_callback, _main_loop
     _check_callback = fn
-    _main_loop = asyncio.get_event_loop()
+    _main_loop = asyncio.get_running_loop()
 
 
 def _check_token(request: Request):

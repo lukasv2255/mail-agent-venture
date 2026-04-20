@@ -65,6 +65,7 @@
 **Chování při startu:** Agent pošle uvítací zprávu s popisem co monitoruje, interval checku a na jaké typy emailů reaguje.
 
 **Příkazy:**
+
 - `/check` — okamžitý check nových emailů
 - `/yes` — schválí a odešle navrhovanou odpověď
 - `/no` — přeskočí navrhovanou odpověď
@@ -82,12 +83,14 @@
 základní template pro více typů mail agentů se společnou architekturou.
 
 **Pevné části šablony:**
+
 - Python orchestrace
 - modulární vrstvy `classifier`, `responder`, `notifier`, `gmail_client`
 - prompts jako hlavní konfigurovatelná vrstva chování
 - project memory v `docs/project_notes/` a `tasks/`
 
 **Proměnné části šablony:**
+
 - intent taxonomy
 - business pravidla
 - datové integrace
@@ -100,6 +103,38 @@ Společná kostra snižuje množství přepisovaného kódu a zároveň zachová
 
 **Vyhýbáme se:** Vytváření každého nového mail agenta od nuly bez sdílené
 struktury, dokumentace a opakovaně použitelného workflow.
+
+---
+
+## ADR-007: Zvážit one-shot spouštění agenta místo smyčky
+
+**Datum:** 2026-04-20
+**Status:** Otevřeno — k rozhodnutí
+
+**Kontext:** Agent aktuálně běží jako dlouhodobý proces (smyčka + APScheduler). Tento přístup má opakující se problémy:
+
+- `asyncio.Lock()` vytvořený mimo event loop → "Future attached to different loop"
+- Vícenásobné spuštění (`run_polling()` + uvicorn thread) komplikuje správu event loopů
+- Zaseknutí `/check` při souběhu více volání
+
+**Navrhovaná alternativa:** Spouštět agenta jako **jednorázový skript každých 5 minut** (cron / Railway Cron Service):
+
+- `python main.py` — načte emaily, zpracuje, ukončí se
+- Telegram bot se spustí jen na dobu zpracování (nebo použít Telegram HTTP API přímo bez bota)
+- Žádná smyčka → žádné problémy s event looopy, zamykáním, duplicitními instancemi
+
+**Výhody:**
+
+- Jednodušší kód — žádný APScheduler, žádný lock
+- Přirozená idempotence — každé spuštění je nezávislé
+- Snazší debugging — jeden run = jeden log
+
+**Nevýhody:**
+
+- `/yes` `/no` schvalování přes Telegram je složitější (musí čekat na odpověď mimo run)
+- Telegram bot nepřijímá příkazy mezi spuštěními (jen v okně zpracování)
+
+**Doporučení:** Zvážit při dalším refaktoru nebo při přechodu na produkci s vyšší zátěží.
 
 ---
 
