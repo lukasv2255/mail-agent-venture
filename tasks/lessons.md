@@ -5,6 +5,18 @@
 
 ---
 
+## 2026-04-18 — Railway `variable list` zkracuje hodnoty — nepoužívat pro kopírování tokenů
+
+**Situace:** Při kopírování env proměnných z Railway CLI (`railway variable list`) do nového projektu byl TELEGRAM_BOT_TOKEN zkrácen v zobrazení → token byl neplatný → app spadla.
+
+**Chyba:** Hodnoty zkopírované z `railway variable list` výstupu mohou být oříznuté. Tokeny a API klíče se pak nastaví nesprávně.
+
+**Správně:** Citlivé hodnoty (tokeny, API klíče) vždy brát ze zdrojového `.env` souboru nebo přímo od uživatele — nikdy z `railway variable list` výstupu.
+
+**Pravidlo:** `railway variable list` je jen pro přehled, ne pro kopírování hodnot.
+
+---
+
 ## 2026-04-16 — Nikdy nepřepisovat .env bez kontroly
 
 **Situace:** Uživatel řekl "vytvoř .env", soubor už existoval a byl vyplněný. Claude ho přepsal.

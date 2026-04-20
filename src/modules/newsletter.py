@@ -37,7 +37,8 @@ logger = logging.getLogger(__name__)
 
 NEWSLETTER_HOUR = int(os.getenv("NEWSLETTER_HOUR", "7"))
 NEWSLETTER_MINUTE = int(os.getenv("NEWSLETTER_MINUTE", "0"))
-NEWSLETTER_DAY = int(os.getenv("NEWSLETTER_DAY", "0"))  # 0=pondělí, 6=neděle
+NEWSLETTER_DAY = int(os.getenv("NEWSLETTER_DAY", "0"))       # 0=pondělí, 6=neděle (ignoruje se při INTERVAL_DAYS=1)
+NEWSLETTER_INTERVAL_DAYS = int(os.getenv("NEWSLETTER_INTERVAL_DAYS", "7"))  # 1=denně, 7=týdně
 
 _QUERIES_FILE = os.path.join(os.path.dirname(__file__), "..", "..", "prompts", "newsletter_queries.txt")
 
@@ -104,11 +105,11 @@ def setup(app):
 
     app.job_queue.run_repeating(
         _scheduled_newsletter,
-        interval=datetime.timedelta(days=7),
+        interval=datetime.timedelta(days=NEWSLETTER_INTERVAL_DAYS),
         first=seconds_until,
         name="newsletter_weekly",
     )
-    logger.info(f"Modul newsletter: inicializován. První odeslání: {first_run:%Y-%m-%d %H:%M} (za {seconds_until:.0f}s)")
+    logger.info(f"Modul newsletter: inicializován. První odeslání: {first_run:%Y-%m-%d %H:%M} (za {seconds_until:.0f}s), interval: {NEWSLETTER_INTERVAL_DAYS}d")
 
 
 async def run_check(bot):
