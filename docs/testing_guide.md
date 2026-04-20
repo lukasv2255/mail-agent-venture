@@ -64,51 +64,7 @@ Viz `tests/projekt_01/testovaci_emaily.md` pro plná znění emailů.
 
 ## Skript pro hromadné odeslání testů
 
-```python
-# tests/send_test_emails.py
-import sys, base64
-from email.message import EmailMessage
-sys.path.insert(0, 'src')
-from gmail_client import get_gmail_service
-
-TESTS = [
-    ("Dotaz na objednavku 4471",
-     "Dobrý den, chtěl bych se zeptat, kdy dorazí moje objednávka číslo 4471. Děkuji, Jan Novák"),
-
-    ("Kde je moje zasilka - obj. 2280",
-     "Dobrý den, objednala jsem kreatin, objednávka č. 2280. Ještě jsem nedostala žádnou informaci o odeslání. Eva Kovářová"),
-
-    ("Dotaz na protein",
-     "Dobrý den, zajímá mě Whey Protein Vanilka. Kolik obsahuje bílkovin na porci a je vhodný pro vegetariány?"),
-
-    ("Protein a diabetes",
-     "Dobrý den, mám diabetes 2. typu a rád bych začal užívat váš protein. Je to bezpečné?"),
-
-    ("Chci vratit zbozi",
-     "Dobrý den, obdržel jsem objednávku 4471 ale protein mi nechutná, chci ho vrátit. Jak mám postupovat? Jan Novák"),
-
-    ("Poskozeny produkt - reklamace",
-     "Dobrý den, objednávka 1102 dorazila s poškozeným obalem a část obsahu byla rozsypaná. Toto je nepřijatelné, chci okamžitě náhradu nebo vrácení peněz. Jana Nováková"),
-
-    ("Objednavka 9999",
-     "Dobrý den, kdy dorazí objednávka číslo 9999?"),
-
-    ("Spoluprace - nabidka reklamy",
-     "Dobrý den, nabízíme reklamní plochy na fitness portálech. Máte zájem o spolupráci?"),
-]
-
-service = get_gmail_service()
-for subject, body in TESTS:
-    msg = EmailMessage()
-    msg['To'] = 'newagent7878@gmail.com'
-    msg['Subject'] = subject
-    msg.set_content(body)
-    raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
-    result = service.users().messages().send(userId='me', body={'raw': raw}).execute()
-    print(f"Odesláno: {subject}")
-```
-
-Spuštění: `python3 tests/send_test_emails.py`
+Spuštění: `python3 tests/responder/projekt_01/test_responder.py`
 
 ---
 

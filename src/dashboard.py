@@ -29,11 +29,13 @@ DRY_RUN = os.getenv("DRY_RUN", "true").lower() == "true"
 
 # Callback nastavený z main.py — spustí run_check
 _check_callback = None
+_main_loop = None
 
 
 def set_check_callback(fn):
-    global _check_callback
+    global _check_callback, _main_loop
     _check_callback = fn
+    _main_loop = asyncio.get_event_loop()
 
 
 def _check_token(request: Request):
@@ -75,7 +77,9 @@ async def api_check(request: Request):
     _check_token(request)
     if _check_callback is None:
         raise HTTPException(status_code=503, detail="Agent není připraven.")
-    asyncio.create_task(_check_callback())
+    if _main_loop is None:
+        raise HTTPException(status_code=503, detail="Main loop není dostupný.")
+    asyncio.run_coroutine_threadsafe(_check_callback(), _main_loop)
     return {"ok": True}
 
 
@@ -115,7 +119,7 @@ async def api_reject(request: Request):
 
 def start_dashboard():
     """Spustí dashboard server ve vedlejším vlákně."""
-    port = int(os.getenv("DASHBOARD_PORT", "8080"))
+    port = int(os.getenv("DASHBOARD_PORT", "8081"))
     config = uvicorn.Config(app, host="0.0.0.0", port=port, log_level="warning")
     server = uvicorn.Server(config)
 

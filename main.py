@@ -139,13 +139,17 @@ async def send_startup_message(context: ContextTypes.DEFAULT_TYPE):
     module_names = ", ".join(name for name, _ in modules)
     has_responder = any(name == "responder" for name, _ in modules)
     has_newsletter = any(name == "newsletter" for name, _ in modules)
+    cmds = ["/check"]
+    if has_responder:
+        cmds += ["/yes", "/no"]
+    if has_newsletter:
+        cmds.append("/newsletter")
     text = (
         f"🤖 E-mailový agent spuštěn\n"
         f"📧 {MAIL_ADDRESS} ({MAIL_CLIENT})\n"
         f"⚙ Moduly: {module_names}\n"
         + (f"⏱ Check každých {CHECK_INTERVAL // 60} min\n" if has_responder else "")
-        + f"\nPříkazy: /check"
-        + (" | /newsletter" if has_newsletter else "")
+        + f"\nPříkazy: {' '.join(cmds)}"
     )
     await context.bot.send_message(chat_id=chat_id, text=text)
 

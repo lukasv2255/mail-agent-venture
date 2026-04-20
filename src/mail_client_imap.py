@@ -50,8 +50,6 @@ def get_unprocessed_emails() -> list[dict]:
     conn = _connect()
     conn.select("INBOX")
 
-    # Hledáme nepřečtené nebo nezpracované — bez custom keyword flagu
-    # Poznámka: custom keyword flagy (IMAP keywords) musí server podporovat
     _, data = conn.search(None, "UNSEEN")
     email_ids = data[0].split()
 

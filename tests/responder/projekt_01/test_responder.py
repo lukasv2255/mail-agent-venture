@@ -8,11 +8,11 @@ import time
 from email.message import EmailMessage
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 from src.gmail_client import get_gmail_service
 
-TARGET = "newagent7878@gmail.com"
+TARGET = "johnybb11@seznam.cz"
 
 TEST_EMAILS = [
     {

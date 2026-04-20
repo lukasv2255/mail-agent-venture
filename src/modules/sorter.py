@@ -116,10 +116,10 @@ def _process_unseen(conn: IMAPClient):
         return
 
     logger.info(f"[sorter] Zpracovávám {len(uids)} nových emailů...")
-    messages = conn.fetch(uids, ["RFC822"])
+    messages = conn.fetch(uids, ["BODY.PEEK[]"])
 
     for uid, data in messages.items():
-        raw = data[b"RFC822"]
+        raw = data[b"BODY[]"]
         msg = email_lib.message_from_bytes(raw)
 
         subject = _decode_header(msg.get("Subject", "(bez předmětu)"))
@@ -204,6 +204,7 @@ def setup(app):
 
 async def run_check(bot):
     """Jednorázový průchod inboxem — pro /check příkaz."""
-    conn = _connect()
-    _process_unseen(conn)
+    loop = asyncio.get_event_loop()
+    conn = await loop.run_in_executor(None, _connect)
+    await loop.run_in_executor(None, _process_unseen, conn)
     conn.logout()
