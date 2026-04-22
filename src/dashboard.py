@@ -5,7 +5,8 @@ Běží jako FastAPI server ve vedlejším vlákně vedle Telegram bota.
 Přístup: http://localhost:8080
 
 Env proměnné:
-  DASHBOARD_PORT   (default: 8080)
+  PORT             (Railway web port, má přednost)
+  DASHBOARD_PORT   (lokální fallback, default: 8081)
   DASHBOARD_TOKEN  (volitelné heslo pro přístup)
 """
 import asyncio
@@ -230,7 +231,7 @@ async def api_reject(request: Request):
 
 def start_dashboard():
     """Spustí dashboard server ve vedlejším vlákně."""
-    port = int(os.getenv("DASHBOARD_PORT", "8081"))
+    port = int(os.getenv("PORT") or os.getenv("DASHBOARD_PORT", "8081"))
     config = uvicorn.Config(app, host="0.0.0.0", port=port, log_level="warning")
     server = uvicorn.Server(config)
 
