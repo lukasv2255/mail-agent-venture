@@ -1,0 +1,8 @@
+# Vyhledávací dotazy pro newsletter
+# Každý řádek = jeden dotaz. Prázdné řádky a řádky začínající # jsou ignorovány.
+
+novostavby bytový dům developer Morava Brno Ostrava Zlín 2026
+rekonstrukce paneláků bytového domu Morava Brno Ostrava 2026
+veřejná zakázka stavba rekonstrukce bytový dům Morava 2026
+hrubá stavba bytový dům developer projekt Morava 2026
+stavební firma developer Brno Ostrava Zlín byty projekt 2026

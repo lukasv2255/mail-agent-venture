@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.mailagent.agent</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/python3</string>
+        <string>main.py</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/lukas/claude-code/mail-agent-venture</string>
+
+    <!-- Automatický restart při pádu -->
+    <key>KeepAlive</key>
+    <true/>
+
+    <!-- Výstup do logů — pád = chybí "stop" před dalším "start" v uptime.jsonl -->
+    <key>StandardOutPath</key>
+    <string>/Users/lukas/claude-code/mail-agent-venture/logs/agent.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/lukas/claude-code/mail-agent-venture/logs/agent_err.log</string>
+
+    <!-- Počkej 5s před restartem (aby se Telegram stihl uvolnit) -->
+    <key>ThrottleInterval</key>
+    <integer>5</integer>
+
+    <!-- Spouštět až po přihlášení uživatele (LaunchAgents, ne LaunchDaemons) -->
+    <key>RunAtLoad</key>
+    <true/>
+</dict>
+</plist>

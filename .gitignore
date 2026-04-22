@@ -1,0 +1,13 @@
+CLAUDE.local.md
+.claude/settings.local.json
+.env
+.env.*
+node_modules/
+.DS_Store
+credentials.json
+token.json
+__pycache__/
+*.pyc
+.venv/
+venv/
+logs/
