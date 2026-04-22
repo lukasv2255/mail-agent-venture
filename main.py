@@ -51,6 +51,8 @@ logging.basicConfig(
     level=logging.INFO,
     handlers=[_agent_log_handler, _agent_err_handler],
 )
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 CHECK_INTERVAL = int(os.getenv("CHECK_INTERVAL_MINUTES", "60")) * 60
