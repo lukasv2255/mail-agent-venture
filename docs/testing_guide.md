@@ -9,14 +9,14 @@ Jak testovat agenta lokálně: posílání testovacích mailů, sledování reak
 Vždy použij `EmailMessage` (ne `MIMEText`) a **nenastavuj `From` header** — jinak se ztratí subject:
 
 ```python
-import sys, base64
+import os, sys, base64
 from email.message import EmailMessage
 sys.path.insert(0, 'src')
 from gmail_client import get_gmail_service
 
 service = get_gmail_service()
 msg = EmailMessage()
-msg['To'] = 'newagent7878@gmail.com'
+msg['To'] = os.getenv('TEST_TARGET_EMAIL', os.getenv('GMAIL_ADDRESS', ''))
 msg['Subject'] = 'Předmět emailu'
 msg.set_content('Tělo emailu...')
 

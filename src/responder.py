@@ -6,11 +6,10 @@ import os
 
 from openai import OpenAI
 
+from src.config import PROMPTS_DIR
 from src.kb_loader import load_kb
 
 logger = logging.getLogger(__name__)
-
-PROMPTS_DIR = "prompts"
 
 client = None
 
@@ -23,10 +22,8 @@ def get_client():
 
 
 def load_response_prompt(email_type):
-    prompt_file = os.path.join(
-        os.path.dirname(__file__), "..", PROMPTS_DIR, f"response_{email_type}.txt"
-    )
-    if not os.path.exists(prompt_file):
+    prompt_file = PROMPTS_DIR / f"response_{email_type}.txt"
+    if not prompt_file.exists():
         raise FileNotFoundError(f"Prompt soubor neexistuje: {prompt_file}")
     with open(prompt_file, encoding="utf-8") as f:
         return f.read()

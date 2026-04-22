@@ -12,11 +12,12 @@ Použití:
 import logging
 import os
 
+from src.config import PROMPTS_DIR
+
 logger = logging.getLogger(__name__)
 
 KB_SOURCE = os.getenv("KB_SOURCE", "file")
-
-KB_DIR = os.path.join(os.path.dirname(__file__), "..", "prompts")
+KB_DIR = PROMPTS_DIR
 
 
 def load_kb() -> str:
@@ -33,14 +34,14 @@ def _load_from_files() -> str:
     """Načte všechny .md a .txt soubory z prompts/ (kromě classifier a response promptů)."""
     kb_parts = []
 
-    for filename in sorted(os.listdir(KB_DIR)):
-        if not (filename.endswith(".md") or filename.endswith(".txt")):
+    for filepath in sorted(KB_DIR.iterdir()):
+        filename = filepath.name
+        if not (filepath.suffix in (".md", ".txt")):
             continue
         # classifier_prompt a response_* jsou systémové prompty, ne KB
         if filename.startswith("classifier_prompt") or filename.startswith("response_"):
             continue
 
-        filepath = os.path.join(KB_DIR, filename)
         with open(filepath, encoding="utf-8") as f:
             content = f.read().strip()
         if content:

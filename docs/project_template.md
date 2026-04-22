@@ -621,7 +621,7 @@ prompts/
 
 Klient chce vidět reálný průběh — přišel e-mail, přišla odpověď — ale nechce dát přístup ke svému inboxu ani datům.
 
-**Řešení:** použij vlastní testovací inbox (např. `newagent7878@gmail.com`). Agent ho monitoruje přes Gmail API, KB je naplněná simulovanými daty klienta.
+**Řešení:** použij vlastní testovací inbox nastavený přes `TEST_TARGET_EMAIL` nebo `GMAIL_ADDRESS`. Agent ho monitoruje přes zvolený mail klient, KB je naplněná simulovanými daty klienta.
 
 ```
 Klient pošle e-mail na testovací adresu

@@ -1,59 +1,68 @@
 # Mail Agent
 
-## Infrastruktura
-
-- **Railway token:** `e2b4b43c-b5c1-4ab8-9885-70d936782acc`
-- **Railway Project ID:** `2e231bd5-5020-4327-8df5-e059f0fcbb8a`
-- **Railway Service ID:** `814fa52b-18b6-4e3c-8127-85cbae48eb16`
-- **GitHub:** `https://github.com/lukasv2255/mail-agent`
-- **Gmail:** `newagent7878@gmail.com`
-- **Telegram Chat ID:** `479991910`
-
 ## Project Memory
 
-Před každou prací zkontroluj:
+Před prací zkontroluj relevantní projektovou paměť:
 
-- `docs/project_notes/key_facts.md` — API klíče, porty, endpointy, konfigurace
-- `docs/project_notes/decisions.md` — co a proč jsme zvolili
-- `docs/project_notes/bugs.md` — problémy které jsme už řešili
-- `tasks/lessons.md` — co se neosvědčilo, co opakovat
+- `docs/key_facts.md` — konfigurace, porty, endpointy, důležité soubory
+- `docs/decisions.md` — architektonická rozhodnutí
+- `docs/bugs.md` — známé a vyřešené chyby
+- `tasks/lessons.md` — poučení a pravidla z práce na projektu
 
-Po každé opravě nebo poučení aktualizuj příslušný soubor.
+Po opravě, poučení nebo změně pravidla aktualizuj příslušný soubor.
 
-## Task Management
+## Trigger Fráze
 
-- Netriviální úkol (3+ kroky) → nejdřív plan do `tasks/todo.md`
-- Po každé korekci → přidej poučení do `tasks/lessons.md`
-- Na začátku session → přečti `tasks/lessons.md`
+- **"nauč se"** = ulož dané pravidlo nebo poznatek do projektového nebo lokálního `.md` souboru podle kontextu.
+- **"dokumentuj"** = zapiš informaci do aktuální projektové paměti, typicky `tasks/lessons.md`, `docs/bugs.md`, nebo jiného relevantního memory dokumentu.
+- **"run"** = spusť tento projekt konkrétní cestou přes launchd. Hlavního agenta nepouštěj ručně přes `python3 main.py`.
+
+Tyto fráze ber jako explicitní pokyn k perzistentnímu zápisu nebo akci, ne jako běžnou konverzační formulaci.
 
 ## Spouštění
 
-- **Lokální testování:** `python3 main.py` — jediný způsob, přímo v terminálu
-- **Produkce (Railway):** Railway spouští `python3 main.py` automaticky
-- `tray.py` byl odstraněn — nepoužívat, způsoboval více instancí najednou
+- Hlavní agent se v tomto projektu spouští přes launchd.
+- Nepouštěj hlavního agenta ručně přes `python3 main.py`, pokud už je spravovaný launchd.
+- Instalace nebo regenerace launchd plistu: `python3 scripts/install_launchd.py`
+- Start/restart/stop dělej přes `launchctl`.
+- Testovací skripty v `tests/` se mohou spouštět ručně.
 
-## Newsletter modul (MODULE_NEWSLETTER)
+## Template Zásady
 
-Env proměnné pro aktivaci:
+- Projekt je template pro klientské instance.
+- Žádné absolutní cesty v kódu.
+- Klientské hodnoty patří do `.env`, ne do kódu ani do `CLAUDE.md`.
+- `.env`, tokeny, credentials a logy necommitovat.
+- Do gitu patří `.env.example` a template soubory.
+- launchd plist v repu je šablona: `launchd/com.mailagent.plist.template`.
+- Konkrétní launchd plist generuje `scripts/install_launchd.py` podle aktuální složky.
 
-```
-MODULE_NEWSLETTER=true
-NEWSLETTER_DAY=0           # den odeslání: 0=pondělí, 1=úterý ... 6=neděle (default 0)
-NEWSLETTER_HOUR=7          # hodina odeslání (default 7)
-NEWSLETTER_MINUTE=0        # minuta odeslání (default 0)
+## Logování
 
-# Gmail (MAIL_CLIENT=gmail):
-GMAIL_ADDRESS=xxx@gmail.com   # odesílatel i příjemce (posílá sám sobě)
+- Provozní logy hlavního agenta:
+  - `logs/agent.log`
+  - `logs/agent_err.log`
+  - `logs/uptime.jsonl`
+- Modulové historie:
+  - `logs/responder/responses.jsonl`
+  - `logs/sorter/sorter.jsonl`
+- Testovací logy patří do příslušných podsložek v `logs/responder/` nebo `logs/sorter/`.
 
-# IMAP/SMTP (MAIL_CLIENT=imap):
-IMAP_USER=xxx@domena.cz
-IMAP_PASSWORD=xxx
-SMTP_HOST=smtp.domena.cz
-SMTP_PORT=587
-```
+## Bezpečnost
 
-Příkaz `/newsletter` v Telegamu odešle newsletter okamžitě (bez čekání na pondělí).
+- Nikdy neukládej tokeny, hesla, Chat ID, credentials ani klientské identifikátory do `CLAUDE.md`.
+- Pokud se tajný údaj objeví v commitu nebo sdíleném souboru, ber ho jako kompromitovaný a doporuč rotaci.
+- Neprováděj destruktivní git nebo mailbox operace bez výslovného pokynu.
+
+## Modulové Poznámky
+
+- `sorter` třídí inbox a nemá měnit stav `seen/unseen`, pokud to uživatel výslovně nechce.
+- `/sort` je ruční třídění existujícího INBOXu přes Telegram.
+- `responder` řeší odpovědi a schvalování.
+- `newsletter` generuje a odesílá newsletter; `/newsletter` ho spustí okamžitě.
 
 ## QA
 
-Před prací na dashboardu přečti `docs/qa/dashboard.md`.
+- Před prací na dashboardu přečti `docs/qa/dashboard.md`.
+- Po změnách v Pythonu spusť minimálně `py_compile` pro dotčené soubory.
+- U běžícího agenta ověř stav přes launchd a logy, ne spuštěním druhé instance.

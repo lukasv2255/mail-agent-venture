@@ -4,6 +4,16 @@ Modulární e-mailový agent — klasifikuje příchozí emaily a automaticky od
 
 Spuštění: `python3 main.py`
 
+Projekt je připravený jako template pro klientské instance. Cesty se počítají
+z aktuálního checkoutu přes `src/config.py`; klientské hodnoty patří do `.env`.
+Postup je v `docs/template_setup.md`.
+
+Interaktivní vytvoření `.env` pro novou instanci:
+
+```bash
+python3 scripts/new_instance_wizard.py
+```
+
 ---
 
 ## Moduly
@@ -23,6 +33,7 @@ Třídí inbox — relevantní B2B nabídky ponechá, zbytek přesune do složky
 - Stupeň 1: hlavičky (`List-Unsubscribe`, `List-ID`, `Precedence: bulk`) → MOVE bez AI
 - Stupeň 2: GPT-4o-mini — je to osobní B2B nabídka? → KEEP nebo MOVE
 - Připojení přes IMAP IDLE (push notifikace), fallback na polling každých 60s
+- `/sort` → ručně setřídí existující INBOX; bere přečtené i nepřečtené, ale stav `seen/unseen` nemění
 
 ### Newsletter (`MODULE_NEWSLETTER=true`)
 

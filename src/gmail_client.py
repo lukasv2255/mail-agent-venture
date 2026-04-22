@@ -6,11 +6,14 @@ import logging
 import os
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from pathlib import Path
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
+
+from src.config import path_from_env
 
 logger = logging.getLogger(__name__)
 
@@ -31,8 +34,8 @@ def get_gmail_service():
     Railway: načte token z env proměnné GMAIL_TOKEN_JSON (base64)
     """
     creds = None
-    token_file = os.getenv("GMAIL_TOKEN_FILE", "token.json")
-    credentials_file = os.getenv("GMAIL_CREDENTIALS_FILE", "credentials.json")
+    token_file = path_from_env("GMAIL_TOKEN_FILE", "token.json")
+    credentials_file = path_from_env("GMAIL_CREDENTIALS_FILE", "credentials.json")
 
     # Railway: token jako base64 env proměnná
     token_b64 = os.getenv("GMAIL_TOKEN_JSON")
@@ -45,8 +48,8 @@ def get_gmail_service():
         tmp.flush()
         creds = Credentials.from_authorized_user_file(tmp.name, SCOPES)
         token_file = tmp.name
-    elif os.path.exists(token_file):
-        creds = Credentials.from_authorized_user_file(token_file, SCOPES)
+    elif token_file.exists():
+        creds = Credentials.from_authorized_user_file(str(token_file), SCOPES)
 
     # Pokud token expiroval, obnov ho
     if not creds or not creds.valid:
@@ -54,10 +57,12 @@ def get_gmail_service():
             creds.refresh(Request())
             logger.info("Gmail token obnoven.")
         else:
-            flow = InstalledAppFlow.from_client_secrets_file(credentials_file, SCOPES)
+            flow = InstalledAppFlow.from_client_secrets_file(str(credentials_file), SCOPES)
             creds = flow.run_local_server(port=0)
             logger.info("Gmail OAuth flow dokončen.")
 
+        if isinstance(token_file, Path):
+            token_file.parent.mkdir(parents=True, exist_ok=True)
         with open(token_file, "w") as f:
             f.write(creds.to_json())
 

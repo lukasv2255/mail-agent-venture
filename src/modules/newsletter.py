@@ -31,6 +31,7 @@ from ddgs import DDGS
 from openai import OpenAI
 from telegram.ext import CommandHandler
 
+from src.config import PROMPTS_DIR
 from src.gmail_client import get_gmail_service
 
 logger = logging.getLogger(__name__)
@@ -40,7 +41,7 @@ NEWSLETTER_MINUTE = int(os.getenv("NEWSLETTER_MINUTE", "0"))
 NEWSLETTER_DAY = int(os.getenv("NEWSLETTER_DAY", "0"))       # 0=pondělí, 6=neděle (ignoruje se při INTERVAL_DAYS=1)
 NEWSLETTER_INTERVAL_DAYS = int(os.getenv("NEWSLETTER_INTERVAL_DAYS", "7"))  # 1=denně, 7=týdně
 
-_QUERIES_FILE = os.path.join(os.path.dirname(__file__), "..", "..", "prompts", "newsletter_queries.txt")
+_QUERIES_FILE = PROMPTS_DIR / "newsletter_queries.txt"
 
 # Max počet URL jejichž obsah plně stáhneme (pomalejší, ale lepší data)
 MAX_FULL_SCRAPE = 3
@@ -53,7 +54,7 @@ _HTTP_HEADERS = {
     )
 }
 
-_FORMAT_FILE = os.path.join(os.path.dirname(__file__), "..", "..", "prompts", "newsletter_format.md")
+_FORMAT_FILE = PROMPTS_DIR / "newsletter_format.md"
 
 _USER_PROMPT = """\
 Dnešní datum: {date}
@@ -71,14 +72,12 @@ Filtruj jen to, co má přímý obchodní potenciál pro prodejce balkonů.
 
 
 def _load_format() -> str:
-    path = os.path.normpath(_FORMAT_FILE)
-    with open(path, encoding="utf-8") as f:
+    with open(_FORMAT_FILE, encoding="utf-8") as f:
         return f.read()
 
 
 def _load_queries() -> list[str]:
-    path = os.path.normpath(_QUERIES_FILE)
-    with open(path, encoding="utf-8") as f:
+    with open(_QUERIES_FILE, encoding="utf-8") as f:
         return [
             line.strip()
             for line in f
@@ -279,7 +278,7 @@ def _send_email(content: str) -> str:
     mail_client = os.getenv("MAIL_CLIENT", "gmail").lower()
     today = datetime.date.today()
     week = today.isocalendar()[1]
-    subject = f"📬 Real Estate Leads – Morava | Týden {week}/{today.year}"
+    subject = f"📬 REALITY INFO – MORAVA | Týden {week}/{today.year}"
 
     if mail_client == "gmail":
         return _send_via_gmail(content, subject)

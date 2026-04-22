@@ -5,15 +5,27 @@
 
 ---
 
-## 2026-04-20 — Sorter označuje emaily jako SEEN, responder je pak nenajde
+## 2026-04-21 — Více procesů = více newsletterů
 
-**Situace:** Sorter a responder běžely zároveň na stejném IMAP inboxu. Sorter fetchoval emaily přes imapclient — seznam.cz ignoruje `BODY.PEEK[]` a označí emaily jako SEEN. Responder hledá UNSEEN → nenajde nic.
+**Situace:** Přišly 4 newslettery místo jednoho. Agent běžel přes launchd (KeepAlive: true) a zároveň byl ručně spuštěn `python3 main.py`. Každý proces má vlastní job queue → každý odešle newsletter samostatně.
 
-**Chyba:** Sorter a responder jsou pro různé projekty, nesmí běžet najednou na stejném inboxu.
+**Chyba:** Spuštění `python3 main.py` ručně zatímco launchd již běží → dvě instance, 409 Conflict od Telegramu, duplicitní newslettery/zprávy.
 
-**Správně:** `MODULE_SORTER=false` při testování responderu. Při testování sorteru `MODULE_RESPONDER=false`.
+**Správně:** Pokud běží launchd, ovládat agenta pouze přes `launchctl start/stop/kickstart`. Nikdy `python3 main.py` ručně.
 
-**Pravidlo:** Sorter = B2B třídění (inbox management). Responder = zákaznické dotazy (auto-reply). Nikdy oba najednou na stejném inboxu.
+**Pravidlo:** Počet odeslaných newsletterů = počet běžících instancí agenta. Vždy zkontrolovat: `ps aux | grep "main.py" | grep -v grep`
+
+---
+
+## 2026-04-20 — Soubeh sorteru a responderu vyžaduje časové okno
+
+**Situace:** Sorter a responder mohou běžet nad stejným IMAP inboxem, pokud má sorter čas email roztřídit dřív, než ho začne řešit responder. V produkčním režimu s `AUTO_RESPOND=true` email typicky několik minut sedí ve schránce a sorter ho v řádu sekund až jedné minuty odklidí nebo ponechá.
+
+**Chyba:** Absolutní pravidlo "sorter a responder nikdy spolu" je příliš silné. Skutečné riziko je krátké nebo nulové časové okno: ruční `/check`, startovní check po restartu, příliš krátký `CHECK_INTERVAL_MINUTES`, nebo testovací běh, kde responder začne zpracovávat inbox dřív, než sorter dokončí třídění.
+
+**Správně:** V běžném provozu mohou být `MODULE_SORTER=true` a `MODULE_RESPONDER=true` současně, pokud je responder plánovaný tak, aby maily nebral okamžitě a sorter měl náskok. Pro čistý izolovaný test konkrétního modulu ale pořád vypínej druhý modul: při testování sorteru `MODULE_RESPONDER=false`, při testování responderu `MODULE_SORTER=false`.
+
+**Pravidlo:** Soubeh sorteru a responderu je bezpečný jen s dostatečným časovým oknem pro sorter; nevyvozuj z testu spuštěného hned po restartu závěr, že produkční souběh je špatně.
 
 ---
 
@@ -73,6 +85,16 @@
 
 ---
 
+## 2026-04-22 — Trigger fráze pro ukládání paměti
+
+**Situace:** Uživatel chce používat krátké fráze jako příkaz k trvalému zapsání pravidel a poznatků.
+
+**Správně:** Frázi `nauč se` ber jako pokyn uložit poznatek do projektového nebo lokálního `.md` souboru podle kontextu. Frázi `dokumentuj` ber jako pokyn zapsat informaci do aktuální projektové paměti, typicky `tasks/lessons.md`, `docs/bugs.md`, nebo jiného relevantního memory dokumentu. Frázi `run` ber jako pokyn spustit projekt konkrétní cestou přes launchd; hlavního agenta nepouštěj ručně přes `python3 main.py`.
+
+**Pravidlo:** `nauč se` = uložit do projektového/lokálního MD; `dokumentuj` = zapsat do lessons/bugs/memory aktuálního projektu; `run` = spustit projekt přes launchd.
+
+---
+
 ## 2026-04-13 — Šablony ukotvovat do projektové memory
 
 **Situace:** Vznikal obecný podklad pro support use-cases, ale uživatel upřesnil,
@@ -98,7 +120,7 @@ struktury, decisions a key facts, ne jen do samostatného dokumentu.
 
 ```python
 msg = MIMEText('tělo', 'plain', 'utf-8')
-msg['to'] = 'newagent7878@gmail.com'
+msg['to'] = os.getenv('TEST_TARGET_EMAIL', os.getenv('GMAIL_ADDRESS', ''))
 msg['subject'] = 'Předmět'
 # NENASTAVUJ msg['from'] — Gmail ho přepíše a ztratí se subject
 raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
@@ -110,7 +132,7 @@ service.users().messages().send(userId='me', body={'raw': raw}).execute()
 ```python
 from email.message import EmailMessage
 msg = EmailMessage()
-msg['To'] = 'newagent7878@gmail.com'
+msg['To'] = os.getenv('TEST_TARGET_EMAIL', os.getenv('GMAIL_ADDRESS', ''))
 msg['Subject'] = 'Předmět'
 msg.set_content('Tělo emailu')
 raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()

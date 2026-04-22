@@ -1,8 +1,9 @@
 """
-Odešle 8 testovacích emailů na newagent7878@gmail.com.
+Odešle 8 testovacích emailů na TEST_TARGET_EMAIL.
 Použití: python scripts/send_test_emails.py
 """
 import base64
+import os
 import sys
 import time
 from email.message import EmailMessage
@@ -12,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 from src.gmail_client import get_gmail_service
 
-TARGET = "johnybb11@seznam.cz"
+TARGET = os.getenv("TEST_TARGET_EMAIL", os.getenv("GMAIL_ADDRESS", ""))
 
 TEST_EMAILS = [
     {

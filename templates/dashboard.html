@@ -50,6 +50,10 @@
         background: #1a3a1a;
         color: #4caf50;
       }
+      .badge.auto {
+        background: #1a2a3a;
+        color: #4db6ff;
+      }
 
       /* Karta čekajícího emailu */
       #pending-card {
@@ -208,6 +212,140 @@
       #status.ok {
         color: #4a4;
       }
+
+      /* Historie */
+      .history-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+      }
+      .history-table th {
+        text-align: left;
+        color: #555;
+        font-weight: normal;
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        padding: 6px 8px;
+        border-bottom: 1px solid #222;
+      }
+      .history-table td {
+        padding: 8px 8px;
+        border-bottom: 1px solid #1a1a1a;
+        vertical-align: top;
+        color: #ccc;
+      }
+      .history-row:hover td {
+        background: #161616;
+        cursor: pointer;
+      }
+      .outcome-badge {
+        display: inline-block;
+        padding: 1px 7px;
+        border-radius: 3px;
+        font-size: 10px;
+        font-weight: bold;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      .outcome-approved {
+        background: #1a3a1a;
+        color: #4caf50;
+      }
+      .outcome-rejected {
+        background: #3a1a1a;
+        color: #cf5050;
+      }
+      .outcome-timeout {
+        background: #2a2a1a;
+        color: #aaa030;
+      }
+      .outcome-dry_run {
+        background: #1a1a2a;
+        color: #5090cf;
+      }
+      .outcome-escalated {
+        background: #3a2020;
+        color: #cf7070;
+      }
+      .outcome-unknown {
+        background: #222;
+        color: #666;
+      }
+      .outcome-auto {
+        background: #1a2a3a;
+        color: #4db6ff;
+        min-width: 20px;
+        text-align: center;
+      }
+
+      /* Stránkování */
+      .pagination {
+        display: flex;
+        gap: 4px;
+        margin-top: 12px;
+        flex-wrap: wrap;
+      }
+      .page-btn {
+        flex: none;
+        padding: 4px 10px;
+        border: 1px solid #2a2a2a;
+        border-radius: 4px;
+        background: none;
+        color: #555;
+        font-size: 11px;
+        cursor: pointer;
+      }
+      .page-btn:hover {
+        border-color: #444;
+        color: #999;
+        opacity: 1;
+      }
+      .page-btn.active {
+        border-color: #4db6ff;
+        color: #4db6ff;
+        background: #0d1a26;
+      }
+      .history-detail {
+        display: none;
+        background: #0d0d0d;
+        border-bottom: 1px solid #222;
+      }
+      .history-detail.open {
+        display: table-row;
+      }
+      .history-detail td {
+        padding: 12px 16px;
+        border-bottom: 1px solid #222;
+      }
+      .detail-label {
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #555;
+        margin-bottom: 4px;
+        margin-top: 12px;
+      }
+      .detail-label:first-child {
+        margin-top: 0;
+      }
+      .detail-text {
+        white-space: pre-wrap;
+        color: #aaa;
+        line-height: 1.5;
+        font-size: 12px;
+      }
+      .chevron {
+        display: inline-block;
+        color: #444;
+        font-size: 16px;
+        line-height: 1;
+        transition: transform 0.15s;
+        transform: rotate(0deg);
+      }
+      .chevron.open {
+        transform: rotate(90deg);
+      }
     </style>
   </head>
   <body>
@@ -247,6 +385,8 @@
     <div id="esc-section"></div>
     <div id="unk-section"></div>
 
+    <div id="history-section" style="margin-top: 32px"></div>
+    <div id="sorter-history-section" style="margin-top: 32px"></div>
     <div id="status"></div>
 
     <script>
@@ -263,9 +403,14 @@
           document.getElementById("meta-client").textContent =
             `📬 ${data.mail_client}`;
           const modeEl = document.getElementById("meta-mode");
-          modeEl.innerHTML = data.dry_run
-            ? '<span class="badge dry">DRY RUN</span>'
-            : '<span class="badge live">PRODUKCE</span>';
+          if (data.dry_run) {
+            modeEl.innerHTML = '<span class="badge dry">DRY RUN</span>';
+          } else if (data.auto_respond) {
+            modeEl.innerHTML =
+              '<span class="badge live">PRODUKCE</span> <span class="badge auto">AUTO</span>';
+          } else {
+            modeEl.innerHTML = '<span class="badge live">PRODUKCE</span>';
+          }
           const queueEl = document.getElementById("meta-queue");
           queueEl.textContent =
             data.queue_remaining > 0
@@ -338,10 +483,15 @@
       </div>
       <div class="section-label">Navrhovaná odpověď</div>
       <div class="draft-box">${esc(p.draft)}</div>
+      ${
+        data.auto_respond
+          ? ""
+          : `
       <div class="actions">
         <button id="btn-approve" onclick="approve()">✅ Schválit a odeslat</button>
         <button id="btn-reject"  onclick="reject()">❌ Zamítnout</button>
-      </div>
+      </div>`
+      }
     `;
 
           setStatus("");
@@ -368,7 +518,8 @@
         try {
           const res = await fetch(url, { method: "POST" });
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          pollForNext(8);
+          refreshHistory();
+          pollForNext(60);
         } catch (err) {
           _isPolling = false;
           setStatus(`Chyba: ${err.message}`, "error");
@@ -389,10 +540,10 @@
             _isPolling = false;
             refresh();
           } else {
-            setTimeout(() => pollForNext(remaining - 1), 1000);
+            setTimeout(() => pollForNext(remaining - 1), 500);
           }
         } catch {
-          setTimeout(() => pollForNext(remaining - 1), 1000);
+          setTimeout(() => pollForNext(remaining - 1), 500);
         }
       }
 
@@ -431,8 +582,256 @@
           .replace(/"/g, "&quot;");
       }
 
+      let _historyPage = 1;
+      let _historyFilter = "all";
+
+      async function refreshHistory(page, filter) {
+        if (page !== undefined) _historyPage = page;
+        if (filter !== undefined) {
+          _historyFilter = filter;
+          _historyPage = 1;
+        }
+        try {
+          const res = await fetch(
+            `/api/history?page=${_historyPage}&per_page=50&filter=${_historyFilter}`,
+          );
+          if (!res.ok) return;
+          const data = await res.json();
+          const el = document.getElementById("history-section");
+          if (!data.total) {
+            el.innerHTML = "";
+            return;
+          }
+
+          const outcomeLabel = {
+            approved: "✅ Odesláno",
+            rejected: "❌ Zamítnuto",
+            timeout: "⏰ Timeout",
+            dry_run: "🔵 Dry run",
+            escalated: "🚨 Eskalace",
+            unknown: "⚪ Neznámý",
+            auto: "✅ Odesláno",
+          };
+
+          const rows = data.items
+            .map((item, i) => {
+              const time = new Date(item.time).toLocaleString("cs-CZ", {
+                day: "2-digit",
+                month: "2-digit",
+                hour: "2-digit",
+                minute: "2-digit",
+              });
+              const cls =
+                "outcome-" +
+                (item.outcome === "auto" ? "approved" : item.outcome);
+              const label = outcomeLabel[item.outcome] || item.outcome;
+              const isAgentDecision =
+                item.auto_mode ||
+                item.outcome === "auto" ||
+                item.outcome === "escalated" ||
+                item.outcome === "unknown";
+              const aBadge = isAgentDecision
+                ? `<span class="outcome-badge outcome-auto" style="margin-right:4px">A</span>`
+                : "";
+              const hasDraft = item.draft && item.draft.trim().length > 0;
+              return `
+              <tr class="history-row" onclick="toggleDetail(${i})">
+                <td style="color:#555;white-space:nowrap">${esc(time)}</td>
+                <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(item.from)}</td>
+                <td style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(item.subject)}</td>
+                <td><span class="type-badge">${esc(item.type)}</span></td>
+                <td>${aBadge}<span class="outcome-badge ${cls}">${esc(label)}</span></td>
+                <td style="text-align:right;padding-right:4px"><span class="chevron" id="arrow-${i}">›</span></td>
+              </tr>
+              <tr class="history-detail" id="detail-${i}">
+                <td colspan="6">
+                  <div class="detail-label">Původní email</div>
+                  <div class="detail-text">${esc(item.body || "—")}</div>
+                  ${hasDraft ? `<div class="detail-label">Navrhovaná odpověď</div><div class="detail-text">${esc(item.draft)}</div>` : ""}
+                </td>
+              </tr>`;
+            })
+            .join("");
+
+          let pagination = "";
+          if (data.pages > 1) {
+            const cur = data.page,
+              total = data.pages;
+            const pages = new Set(
+              [1, total, cur, cur - 2, cur - 1, cur + 1, cur + 2].filter(
+                (p) => p >= 1 && p <= total,
+              ),
+            );
+            const sorted = [...pages].sort((a, b) => a - b);
+            const btns = [];
+            let prev = null;
+            for (const p of sorted) {
+              if (prev && p - prev > 1)
+                btns.push(`<span style="color:#333;padding:4px 6px">…</span>`);
+              btns.push(
+                `<button class="page-btn${p === cur ? " active" : ""}" onclick="refreshHistory(${p})">${p}</button>`,
+              );
+              prev = p;
+            }
+            pagination = `<div class="pagination">${btns.join("")}</div>`;
+          }
+
+          const filters = [
+            { key: "all", label: "Vše" },
+            { key: "auto", label: "A" },
+            { key: "unk", label: "Neznámý" },
+            { key: "esc", label: "Eskalace" },
+            { key: "resolved", label: "Vyřízeno" },
+          ];
+          const filterTabs = filters
+            .map(
+              (f) =>
+                `<button class="page-btn${_historyFilter === f.key ? " active" : ""}"
+              onclick="refreshHistory(1, '${f.key}')">${f.label}</button>`,
+            )
+            .join("");
+
+          el.innerHTML = `
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+              <span class="section-label">📋 Historie (${data.total})</span>
+              <div style="display:flex;gap:4px">${filterTabs}</div>
+            </div>
+            <table class="history-table">
+              <thead><tr><th>Čas</th><th>Od</th><th>Předmět</th><th>Typ</th><th>Výsledek</th><th></th></tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+            ${pagination}`;
+        } catch (_) {}
+      }
+
+      function toggleDetail(i) {
+        const el = document.getElementById("detail-" + i);
+        const arrow = document.getElementById("arrow-" + i);
+        if (!el) return;
+        const open = el.classList.toggle("open");
+        if (arrow) arrow.classList.toggle("open", open);
+      }
+
+      let _sorterPage = 1;
+      let _sorterFilter = "all";
+
+      async function refreshSorterHistory(page, filter) {
+        if (page !== undefined) _sorterPage = page;
+        if (filter !== undefined) {
+          _sorterFilter = filter;
+          _sorterPage = 1;
+        }
+        try {
+          const res = await fetch(
+            `/api/sorter-history?page=${_sorterPage}&per_page=50&filter=${_sorterFilter}`,
+          );
+          if (!res.ok) return;
+          const data = await res.json();
+          const el = document.getElementById("sorter-history-section");
+          if (!data.total) {
+            el.innerHTML = "";
+            return;
+          }
+
+          const outcomeLabel = {
+            kept: "✅ Ponecháno",
+            moved: "📁 Přesunuto",
+          };
+          const methodLabel = {
+            ai: "AI",
+            headers: "Hlavičky",
+            self: "Vlastní",
+          };
+
+          const rows = data.items
+            .map((item, i) => {
+              const idx = "s" + i;
+              const time = new Date(item.time).toLocaleString("cs-CZ", {
+                day: "2-digit",
+                month: "2-digit",
+                hour: "2-digit",
+                minute: "2-digit",
+              });
+              const outcomeCls =
+                item.outcome === "kept"
+                  ? "outcome-approved"
+                  : "outcome-rejected";
+              const label = outcomeLabel[item.outcome] || item.outcome;
+              const method = methodLabel[item.method] || item.method;
+              return `
+              <tr class="history-row" onclick="toggleDetail('${idx}')">
+                <td style="color:#555;white-space:nowrap">${esc(time)}</td>
+                <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(item.from)}</td>
+                <td style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(item.subject)}</td>
+                <td><span class="type-badge">${esc(method)}</span></td>
+                <td><span class="outcome-badge ${outcomeCls}">${esc(label)}</span></td>
+                <td style="text-align:right;padding-right:4px"><span class="chevron" id="arrow-${idx}">›</span></td>
+              </tr>
+              <tr class="history-detail" id="detail-${idx}">
+                <td colspan="6">
+                  <div class="detail-label">Původní email</div>
+                  <div class="detail-text">${esc(item.body || "—")}</div>
+                </td>
+              </tr>`;
+            })
+            .join("");
+
+          let pagination = "";
+          if (data.pages > 1) {
+            const cur = data.page,
+              total = data.pages;
+            const pages = new Set(
+              [1, total, cur, cur - 2, cur - 1, cur + 1, cur + 2].filter(
+                (p) => p >= 1 && p <= total,
+              ),
+            );
+            const sorted = [...pages].sort((a, b) => a - b);
+            const btns = [];
+            let prev = null;
+            for (const p of sorted) {
+              if (prev && p - prev > 1)
+                btns.push(`<span style="color:#333;padding:4px 6px">…</span>`);
+              btns.push(
+                `<button class="page-btn${p === cur ? " active" : ""}" onclick="refreshSorterHistory(${p})">${p}</button>`,
+              );
+              prev = p;
+            }
+            pagination = `<div class="pagination">${btns.join("")}</div>`;
+          }
+
+          const filters = [
+            { key: "all", label: "Vše" },
+            { key: "kept", label: "Ponecháno" },
+            { key: "moved", label: "Přesunuto" },
+            { key: "ai", label: "AI" },
+          ];
+          const filterTabs = filters
+            .map(
+              (f) =>
+                `<button class="page-btn${_sorterFilter === f.key ? " active" : ""}"
+                onclick="refreshSorterHistory(1, '${f.key}')">${f.label}</button>`,
+            )
+            .join("");
+
+          el.innerHTML = `
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+              <span class="section-label">🗂 Sorter (${data.total})</span>
+              <div style="display:flex;gap:4px">${filterTabs}</div>
+            </div>
+            <table class="history-table">
+              <thead><tr><th>Čas</th><th>Od</th><th>Předmět</th><th>Metoda</th><th>Výsledek</th><th></th></tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+            ${pagination}`;
+        } catch (_) {}
+      }
+
       refresh();
+      refreshHistory();
+      refreshSorterHistory();
       setInterval(refresh, REFRESH_MS);
+      setInterval(refreshHistory, 15000);
+      setInterval(refreshSorterHistory, 15000);
     </script>
   </body>
 </html>

@@ -1,17 +1,17 @@
 """
-Setup skript — vytvoří .env soubor pro mail-agent.
+Setup skript — vytvoří .env soubor pro aktuální instanci projektu.
 
 Spuštění (jednou na každém novém PC):
   python3 scripts/setup-env.py
 
 Pokud .env už existuje, skript se zeptá jestli ho přepsat.
 """
-import os
 import sys
+from pathlib import Path
 
 
-ENV_FILE = os.path.join(os.path.dirname(__file__), "..", ".env")
-ENV_FILE = os.path.normpath(ENV_FILE)
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+ENV_FILE = PROJECT_ROOT / ".env"
 
 
 def ask(prompt, default=None, secret=False):
@@ -31,7 +31,7 @@ def main():
     print("Mail Agent — nastavení prostředí")
     print("=" * 40)
 
-    if os.path.exists(ENV_FILE):
+    if ENV_FILE.exists():
         answer = input(f"\n.env již existuje. Přepsat? (ano/ne) [ne]: ").strip().lower()
         if answer not in ("ano", "a", "yes", "y"):
             print("Zrušeno.")
@@ -39,13 +39,13 @@ def main():
 
     print("\n--- Telegram ---")
     telegram_token = ask("Bot Token (od BotFather)")
-    telegram_chat_id = ask("Chat ID", default="479991910")
+    telegram_chat_id = ask("Chat ID")
 
     print("\n--- OpenAI ---")
     openai_key = ask("OpenAI API Key")
 
     print("\n--- Gmail ---")
-    gmail_address = ask("Gmail adresa agenta", default="newagent7878@gmail.com")
+    gmail_address = ask("Gmail adresa agenta")
 
     print("\n--- Agent ---")
     dry_run = ask("DRY_RUN (true = jen logy, false = odesílá emaily)", default="true")
@@ -53,6 +53,13 @@ def main():
     check_interval = ask("CHECK_INTERVAL_MINUTES (jak často kontrolovat inbox)", default="60")
 
     env_content = f"""# Telegram
+CLIENT_NAME=
+LOG_DIR=logs
+DATA_DIR=data
+PROMPTS_DIR=prompts
+TEMPLATES_DIR=templates
+
+# Telegram
 TELEGRAM_BOT_TOKEN={telegram_token}
 TELEGRAM_CHAT_ID={telegram_chat_id}
 
@@ -90,6 +97,9 @@ MAIL_CLIENT={mail_client}
 KB_SOURCE=file
 DRY_RUN={dry_run}
 CHECK_INTERVAL_MINUTES={check_interval}
+MODULE_RESPONDER=true
+MODULE_SORTER=true
+MODULE_NEWSLETTER=false
 """
 
     with open(ENV_FILE, "w", encoding="utf-8") as f:
@@ -100,6 +110,7 @@ CHECK_INTERVAL_MINUTES={check_interval}
     print("  1. Vlož credentials.json do root projektu (Google Cloud Console)")
     print("  2. Spusť OAuth flow: python3 src/gmail_client.py")
     print("  3. Spusť agenta:     python3 main.py")
+    print("  4. macOS launchd:    python3 scripts/install_launchd.py")
 
 
 if __name__ == "__main__":

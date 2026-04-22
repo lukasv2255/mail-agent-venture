@@ -43,12 +43,12 @@ TELEGRAM_BOT_TOKEN=    # Telegram bot
 
 ## Mail Agent — Railway infrastruktura
 
-- **Railway token:** `e2b4b43c-b5c1-4ab8-9885-70d936782acc`
-- **Project ID:** `2e231bd5-5020-4327-8df5-e059f0fcbb8a`
-- **Service ID:** `814fa52b-18b6-4e3c-8127-85cbae48eb16`
+- **Railway token:** ukládat pouze mimo repo, například do lokální `.env` nebo správce tajemství
+- **Project ID:** doplnit v konkrétní klientské instanci, ne v template repozitáři
+- **Service ID:** doplnit v konkrétní klientské instanci, ne v template repozitáři
 - **GitHub repo:** `https://github.com/lukasv2255/mail-agent`
-- **Gmail:** `newagent7878@gmail.com`
-- **Telegram Chat ID:** `479991910`
+- **Mailbox:** nastavuje se přes `MAIL_CLIENT` a související proměnné v `.env`
+- **Telegram Chat ID:** nastavuje se pouze v lokální `.env`
 
 ## Mail Agent — E-mailový agent
 
@@ -56,10 +56,9 @@ TELEGRAM_BOT_TOKEN=    # Telegram bot
 - Tento repozitář slouží jako základ pro více variant mail agentů
 - Současná implementace je referenční MVP pro Gmail + Telegram approval flow
 - Nové varianty agentů mají znovu použít stejnou projektovou memory strukturu:
-  - `docs/project_notes/key_facts.md`
-  - `docs/project_notes/decisions.md`
-  - `docs/project_notes/bugs.md`
-  - `docs/project_notes/issues.md`
+  - `docs/key_facts.md`
+  - `docs/decisions.md`
+  - `docs/bugs.md`
   - `tasks/todo.md`
   - `tasks/lessons.md`
 
@@ -117,7 +116,7 @@ TELEGRAM_BOT_TOKEN=    # Telegram bot
 ```
 GMAIL_CREDENTIALS_FILE=credentials.json
 GMAIL_TOKEN_FILE=token.json
-GMAIL_ADDRESS=sledovany@gmail.com
+GMAIL_ADDRESS=
 ANTHROPIC_API_KEY=
 TELEGRAM_BOT_TOKEN=
 TELEGRAM_CHAT_ID=

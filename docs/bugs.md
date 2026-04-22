@@ -59,15 +59,15 @@ return ""
 
 ---
 
-## 2026-04-20 — Sorter označuje emaily jako SEEN a responder je nenajde
+## 2026-04-20 — Soubeh sorteru a responderu bez časového okna koliduje
 
-**Symptom:** Sorter zpracovává emaily (IMAP fetch přes imapclient), responder pak hledá UNSEEN a nenajde nic.
+**Symptom:** Při testu spuštěném hned po restartu nebo přes ruční `/check` může responder zpracovat emaily dřív, než sorter dokončí třídění. V minulosti se to projevovalo i tím, že po sorter fetchi responder některé emaily nenašel.
 
-**Root cause:** imapclient na seznam.cz označuje emaily jako SEEN i při `BODY.PEEK[]` fetch — server ignoruje PEEK direktive. Sorter a responder soutěží o stejný UNSEEN inbox.
+**Root cause:** Problém není samotný souběh modulů, ale absence dostatečného časového okna. Sorter pracuje v řádu sekund až jedné minuty, zatímco responder může při startovním/scheduled/ručním checku okamžitě sáhnout do stejného inboxu.
 
-**Řešení:** Sorter a responder nepoužívat zároveň na stejném inboxu. Při testování responderu nastavit `MODULE_SORTER=false`.
+**Řešení:** V produkčním režimu mohou sorter a responder běžet současně, pokud responder nechává emaily několik minut ve schránce a sorter má náskok. Pro izolované testy vypnout netestovaný modul.
 
-**Prevence:** Sorter = B2B třídění inboxu. Responder = zákaznické dotazy. Jsou pro různé projekty — nikdy ne oba najednou na stejném inboxu.
+**Prevence:** Nevyhodnocovat produkční souběh podle testu spuštěného hned po restartu. Při společném běhu hlídat `CHECK_INTERVAL_MINUTES`, startovní check a ruční `/check`, aby responder nepředběhl sorter.
 
 ---
 

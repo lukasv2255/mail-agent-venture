@@ -6,6 +6,8 @@ import os
 
 from openai import OpenAI
 
+from src.config import PROMPTS_DIR
+
 logger = logging.getLogger(__name__)
 
 UNKNOWN_TYPE = "UNK"
@@ -21,13 +23,8 @@ def get_client():
     return client
 
 
-PROMPTS_DIR = "prompts"
-
-
 def load_classifier_prompt():
-    prompt_file = os.path.join(
-        os.path.dirname(__file__), "..", PROMPTS_DIR, "classifier_prompt.txt"
-    )
+    prompt_file = PROMPTS_DIR / "classifier_prompt.txt"
     with open(prompt_file, encoding="utf-8") as f:
         return f.read()
 
