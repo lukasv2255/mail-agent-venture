@@ -276,7 +276,10 @@ def _generate_content(raw_data: str) -> str:
 
 def _send_email(content: str) -> str:
     """Odešle newsletter. Odesílatel = příjemce (klient posílá sám sobě)."""
-    mail_client = os.getenv("MAIL_CLIENT", "gmail").lower()
+    mail_client = os.getenv(
+        "NEWSLETTER_MAIL_CLIENT",
+        os.getenv("MAIL_CLIENT", "gmail"),
+    ).lower()
     today = datetime.date.today()
     week = today.isocalendar()[1]
     subject = f"📬 REALITY INFO – MORAVA | Týden {week}/{today.year}"
