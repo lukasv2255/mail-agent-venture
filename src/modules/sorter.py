@@ -18,6 +18,7 @@ Rozhraní:
 import asyncio
 import email as email_lib
 import email.header
+import email.utils
 import hashlib
 import json
 import logging
@@ -37,6 +38,7 @@ IMAP_USER = os.getenv("IMAP_USER", "")
 IMAP_PASSWORD = os.getenv("IMAP_PASSWORD", "")
 TARGET_FOLDER = os.getenv("SORTER_TARGET_FOLDER", "others")
 MANUAL_SORT_LIMIT = int(os.getenv("SORTER_MANUAL_LIMIT", "200"))
+GMAIL_ADDRESS = os.getenv("GMAIL_ADDRESS", "")
 
 NEWSLETTER_HEADERS = ("List-Unsubscribe", "List-ID", "List-Post")
 
@@ -159,6 +161,25 @@ def _extract_body(msg) -> str:
     return ""
 
 
+def _extract_addresses(value: str) -> set[str]:
+    return {
+        address.strip().lower()
+        for _, address in email.utils.getaddresses([value or ""])
+        if address and address.strip()
+    }
+
+
+def _is_internal_mail(msg) -> bool:
+    sender_addresses = _extract_addresses(msg.get("From", ""))
+
+    trusted_senders = {
+        address.strip().lower()
+        for address in (IMAP_USER, GMAIL_ADDRESS)
+        if address and address.strip()
+    }
+    return bool(sender_addresses & trusted_senders)
+
+
 def _is_newsletter(msg) -> bool:
     for header in NEWSLETTER_HEADERS:
         if msg.get(header):
@@ -207,10 +228,10 @@ def _process_uids(conn: IMAPClient, uids: list[int], label: str) -> dict:
                 stats["skipped"] += 1
                 continue
 
-            # Emaily od sebe sama vždy ponechat (vlastní newslettery apod.)
-            if IMAP_USER and IMAP_USER.lower() in sender.lower():
-                logger.info(f"[sorter] KEEP/self     | {sender} | {subject}")
-                _log_sort(sender, subject, "", "KEEP", "self", message_id, email_key)
+            # Interní e-maily od vlastních agent účtů nikdy nepřesouvat.
+            if _is_internal_mail(msg):
+                logger.info(f"[sorter] KEEP/internal | {sender} | {subject}")
+                _log_sort(sender, subject, "", "KEEP", "internal", message_id, email_key)
                 stats["kept"] += 1
                 continue
 
