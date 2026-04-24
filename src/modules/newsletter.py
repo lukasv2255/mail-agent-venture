@@ -310,29 +310,32 @@ def _send_email(content: str) -> str:
 
 
 def _send_via_gmail(content: str, subject: str) -> str:
-    address = os.getenv("GMAIL_ADDRESS")
-    if not address:
+    sender_address = os.getenv("GMAIL_ADDRESS")
+    recipient_address = os.getenv("NEWSLETTER_RECIPIENT_EMAIL", os.getenv("GMAIL_ADDRESS"))
+    if not sender_address:
         raise ValueError("GMAIL_ADDRESS není nastavena.")
+    if not recipient_address:
+        raise ValueError("NEWSLETTER_RECIPIENT_EMAIL ani GMAIL_ADDRESS není nastavena.")
 
     service = get_gmail_service()
     msg = MIMEText(content, "plain", "utf-8")
-    msg["To"] = address
+    msg["To"] = recipient_address
     msg["Subject"] = subject
     # From nastavuje Gmail sám — nenastavovat ručně (viz lessons.md)
 
     raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
     service.users().messages().send(userId="me", body={"raw": raw}).execute()
-    return address
+    return recipient_address
 
 
 def _send_via_smtp(content: str, subject: str) -> str:
-    address = os.getenv("IMAP_USER")
+    address = os.getenv("NEWSLETTER_RECIPIENT_EMAIL", os.getenv("IMAP_USER"))
     smtp_host = os.getenv("SMTP_HOST")
     smtp_port = int(os.getenv("SMTP_PORT", "587"))
     password = os.getenv("IMAP_PASSWORD")
 
     if not all([address, smtp_host, password]):
-        raise ValueError("Pro SMTP nastav IMAP_USER, SMTP_HOST, IMAP_PASSWORD.")
+        raise ValueError("Pro SMTP nastav NEWSLETTER_RECIPIENT_EMAIL nebo IMAP_USER, SMTP_HOST, IMAP_PASSWORD.")
 
     msg = MIMEText(content, "plain", "utf-8")
     msg["To"] = address
