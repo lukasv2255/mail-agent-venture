@@ -39,6 +39,9 @@ NEWSLETTER_HOUR = int(os.getenv("NEWSLETTER_HOUR", "7"))
 NEWSLETTER_MINUTE = int(os.getenv("NEWSLETTER_MINUTE", "0"))
 NEWSLETTER_DAY = int(os.getenv("NEWSLETTER_DAY", "0"))       # 0=pondělí, 6=neděle (ignoruje se při INTERVAL_DAYS=1)
 NEWSLETTER_INTERVAL_DAYS = int(os.getenv("NEWSLETTER_INTERVAL_DAYS", "7"))  # 1=denně, 7=týdně
+COLLECT_TIMEOUT_SECONDS = int(os.getenv("NEWSLETTER_COLLECT_TIMEOUT_SECONDS", "120"))
+GENERATE_TIMEOUT_SECONDS = int(os.getenv("NEWSLETTER_GENERATE_TIMEOUT_SECONDS", "180"))
+SEND_TIMEOUT_SECONDS = int(os.getenv("NEWSLETTER_SEND_TIMEOUT_SECONDS", "45"))
 
 _QUERIES_FILE = os.path.join(os.path.dirname(__file__), "..", "..", "prompts", "newsletter_queries.txt")
 
@@ -132,17 +135,33 @@ async def _generate_and_send(bot):
         loop = asyncio.get_event_loop()
 
         logger.info("[newsletter] Sbírám data z webu...")
-        raw_data = await loop.run_in_executor(None, _collect_data)
+        await bot.send_message(chat_id=chat_id, text="🔎 Newsletter: sbírám data z webu...")
+        raw_data = await asyncio.wait_for(
+            loop.run_in_executor(None, _collect_data),
+            timeout=COLLECT_TIMEOUT_SECONDS,
+        )
 
         logger.info("[newsletter] Generuji obsah pomocí GPT-4o...")
-        content = await loop.run_in_executor(None, _generate_content, raw_data)
+        await bot.send_message(chat_id=chat_id, text="🧠 Newsletter: generuji obsah...")
+        content = await asyncio.wait_for(
+            loop.run_in_executor(None, _generate_content, raw_data),
+            timeout=GENERATE_TIMEOUT_SECONDS,
+        )
 
         logger.info("[newsletter] Odesílám email...")
-        recipient = await loop.run_in_executor(None, _send_email, content)
+        await bot.send_message(chat_id=chat_id, text="📤 Newsletter: odesílám email...")
+        recipient = await asyncio.wait_for(
+            loop.run_in_executor(None, _send_email, content),
+            timeout=SEND_TIMEOUT_SECONDS,
+        )
 
         await bot.send_message(chat_id=chat_id, text=f"✅ Newsletter odeslán na {recipient}")
         logger.info(f"[newsletter] Hotovo → {recipient}")
 
+    except asyncio.TimeoutError as e:
+        logger.error("[newsletter] Timeout při zpracování newsletteru.", exc_info=True)
+        await bot.send_message(chat_id=chat_id, text="❌ Newsletter selhal: timeout při zpracování.")
+        raise e
     except Exception as e:
         logger.error(f"[newsletter] Chyba: {e}", exc_info=True)
         await bot.send_message(chat_id=chat_id, text=f"❌ Newsletter selhal: {e}")
@@ -266,6 +285,7 @@ def _generate_content(raw_data: str) -> str:
         ],
         temperature=0.3,
         max_tokens=3000,
+        timeout=GENERATE_TIMEOUT_SECONDS,
     )
     return response.choices[0].message.content
 
@@ -319,7 +339,7 @@ def _send_via_smtp(content: str, subject: str) -> str:
     msg["From"] = address
     msg["Subject"] = subject
 
-    with smtplib.SMTP(smtp_host, smtp_port) as server:
+    with smtplib.SMTP(smtp_host, smtp_port, timeout=SEND_TIMEOUT_SECONDS) as server:
         server.starttls()
         server.login(address, password)
         server.send_message(msg)
