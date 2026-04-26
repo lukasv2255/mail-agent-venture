@@ -30,7 +30,7 @@ Spusť z kořene projektu: `python3 -c "..."` nebo ze skriptu v `tests/`.
 
 ## Testovací scénáře — Projekt 01 (E-shop)
 
-Viz `tests/projekt_01/testovaci_emaily.md` pro plná znění emailů.
+Viz `tests/responder/README.md` pro plná znění emailů.
 
 | Test | Předmět                         | Očekávaná klasifikace | Akce agenta                                           |
 | ---- | ------------------------------- | --------------------- | ----------------------------------------------------- |
@@ -64,7 +64,7 @@ Viz `tests/projekt_01/testovaci_emaily.md` pro plná znění emailů.
 
 ## Skript pro hromadné odeslání testů
 
-Spuštění: `python3 tests/responder/projekt_01/test_responder.py`
+Spuštění: `python3 tests/responder/test_responder.py`
 
 ---
 

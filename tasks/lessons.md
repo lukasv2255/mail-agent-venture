@@ -17,6 +17,18 @@
 
 ---
 
+## 2026-04-25 — Sorter feedback musí mít vlastní persistentní storage
+
+**Situace:** Dashboard dostal ruční akci `Přesunout do spamu` pro dříve ponechaný email a uživatel chtěl, aby si to agent pamatoval i po redeploy.
+
+**Chyba:** Spoléhat na `logs/sorter/sorter.jsonl` nestačí. Historie slouží hlavně jako audit a lokální soubory na Railway bez persistentního volume po redeploy zmizí.
+
+**Správně:** Ruční pravidla ukládat odděleně od historie, ideálně do `DATA_DIR/sorter_rules.db`, a sorter je aplikovat před AI klasifikací. Dashboard akce musí uložit pravidlo i přesunout konkrétní email.
+
+**Pravidlo:** Audit log není persistentní pravidlové úložiště. Cokoliv se má "naučit" pro příště, patří do samostatné storage.
+
+---
+
 ## 2026-04-20 — Soubeh sorteru a responderu vyžaduje časové okno
 
 **Situace:** Sorter a responder mohou běžet nad stejným IMAP inboxem, pokud má sorter čas email roztřídit dřív, než ho začne řešit responder. V produkčním režimu s `AUTO_RESPOND=true` email typicky několik minut sedí ve schránce a sorter ho v řádu sekund až jedné minuty odklidí nebo ponechá.

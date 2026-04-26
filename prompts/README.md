@@ -18,5 +18,5 @@ Každý projekt má vlastní KB v `tests/<modul>/<projekt>/kb.md`.
 Aby agent používal KB daného projektu, zkopíruj soubory do `prompts/`:
 
 ```
-cp tests/responder/projekt_01/kb.md prompts/kb_projekt01.md
+cp tests/responder/kb.md prompts/kb_projekt01.md
 ```

@@ -113,6 +113,24 @@ return ""
 
 **Prevence:** Nikdy nevytvářet `asyncio.Lock()` na úrovni modulu. `run_polling()` si vytváří vlastní event loop — vše co s ním interaguje musí být vytvořeno uvnitř `post_init` nebo async kontextu.
 
+## 2026-04-25 — Tělo emailu se nezobrazuje v sorter historii na dashboardu
+
+**Symptom:** V sorter historii (rozkliknutý řádek) se tělo emailu zobrazuje jako `—` nebo prázdné místo, přestože email tělo obsahoval.
+
+**Root cause:** Tři příčiny dohromady:
+
+1. `item.body` bylo v JSONL prázdné (`""`) pro emaily klasifikované přes hlavičky nebo naučená pravidla — `_log_sort()` jim předával `body=""` bez extrakce textu.
+2. Pro HTML-only emaily vrací `_extract_body()` v `sorter.py` prázdný string — chybí HTML fallback (na rozdíl od `gmail_client.py` který ho má).
+3. Gmail fallback vrátí surové HTML tagy — `esc()` v JS je escapuje, zobrazí se jako text se `&lt;p&gt;` apod.
+
+**Řešení (částečné — netestováno):** Frontend změněn na `item.body_display || "—"` místo `item.body || "—"`. Pole `body_display` zatím v backendu neexistuje — bude potřeba přidat do `_log_sort()` v `sorter.py` jako čistý plain text (bez HTML tagů, zkrácený na rozumnou délku pro zobrazení).
+
+**Stav:** Opraveno. Merge konflikt vyřešen. `body_display` přidáno do `_log_sort()`. HTML fallback opraven i v `gmail_client.py` (stejná příčina — vrací raw HTML tagy místo čistého textu). Netestováno na živém inboxu.
+
+**Prevence:** Při logování sorter záznamu vždy extrahovat body před voláním `_log_sort()`, ne po. Přidat `body_display` do schématu záznamu hned při prvním zavedení sorter logování.
+
+---
+
 ## Příklady
 
 ## 2026-03-29 — DB připojení selhává na stagingu

@@ -6,7 +6,8 @@ Spuštění: `python3 main.py`
 
 Projekt je připravený jako template pro klientské instance. Cesty se počítají
 z aktuálního checkoutu přes `src/config.py`; klientské hodnoty patří do `.env`.
-Postup je v `docs/template_setup.md`.
+Setup je v `docs/template_setup.md`, Railway deploy pro tento repo v
+`docs/railway_deploy.md`.
 
 Interaktivní vytvoření `.env` pro novou instanci:
 
@@ -61,7 +62,7 @@ Testovací emaily a očekávané výsledky jsou v `tests/`:
 
 ```
 tests/
-  responder/projekt_01/   — e-shop s doplňky stravy
-  sorter/projekt_01/      — třídění B2B nabídek
+  responder/              — e-shop s doplňky stravy
+  sorter/                 — třídění B2B nabídek
   newsletter/             — (připraveno)
 ```
