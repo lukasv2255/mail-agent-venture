@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Mail Agent — Dashboard</title>
+    <title>Mail agent - template — Dashboard</title>
     <style>
       * {
         box-sizing: border-box;
@@ -144,6 +144,24 @@
       #btn-reject {
         background: #3a1f1f;
         color: #cf7e7e;
+      }
+      .detail-actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 12px;
+      }
+      .detail-action-btn {
+        flex: none;
+        padding: 8px 12px;
+        font-size: 12px;
+        border: 1px solid #4a2222;
+        background: #2a1717;
+        color: #e09a9a;
+      }
+      .detail-action-btn:hover {
+        opacity: 1;
+        border-color: #7a3333;
+        color: #f0b0b0;
       }
 
       .alert-card {
@@ -357,7 +375,7 @@
         margin-bottom: 6px;
       "
     >
-      <h1>Mail Agent</h1>
+      <h1>Mail agent - template</h1>
       <button
         id="btn-check"
         onclick="triggerCheck()"
@@ -398,6 +416,17 @@
           const res = await fetch("/api/status");
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           const data = await res.json();
+
+          // Responder-závislé prvky
+          const btnCheck = document.getElementById("btn-check");
+          const pendingCard = document.getElementById("pending-card");
+          if (!data.responder_enabled) {
+            btnCheck.style.display = "none";
+            pendingCard.style.display = "none";
+          } else {
+            btnCheck.style.display = "";
+            pendingCard.style.display = "";
+          }
 
           // Meta
           document.getElementById("meta-client").textContent =
@@ -712,6 +741,70 @@
         if (arrow) arrow.classList.toggle("open", open);
       }
 
+      async function moveSorterEmailToSpam(emailKey, ruleMode, button) {
+        if (!emailKey) return;
+        const originalText = button ? button.textContent : "";
+        if (button) {
+          button.disabled = true;
+          button.textContent = "Přesouvám...";
+        }
+        try {
+          const res = await fetch("/api/sorter/move-to-spam", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email_key: emailKey, rule_mode: ruleMode }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+          const ruleLabel =
+            data.rule_type === "from_address"
+              ? "odesílatel"
+              : data.rule_type === "content_hash"
+                ? "typ obsahu"
+                : data.rule_type;
+          const nextFilter = _sorterFilter === "kept" ? "all" : _sorterFilter;
+          setStatus(`Email přesunut. Naučeno jako ${ruleLabel}.`, "ok");
+          await refreshSorterHistory(1, nextFilter);
+        } catch (err) {
+          if (button) {
+            button.disabled = false;
+            button.textContent = originalText;
+          }
+          setStatus(`Chyba: ${err.message}`, "error");
+        }
+      }
+
+      async function removeSorterRule(emailKey, ruleType, ruleValue, button) {
+        if (!emailKey || !ruleType || !ruleValue) return;
+        const originalText = button ? button.textContent : "";
+        if (button) {
+          button.disabled = true;
+          button.textContent = "Ruším...";
+        }
+        try {
+          const res = await fetch("/api/sorter/remove-rule", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              email_key: emailKey,
+              rule_type: ruleType,
+              rule_value: ruleValue,
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+          const nextFilter = _sorterFilter === "moved" ? "all" : _sorterFilter;
+          setStatus("Pravidlo zrušeno a email vrácen do inboxu.", "ok");
+          await refreshSorterHistory(1, nextFilter);
+        } catch (err) {
+          if (button) {
+            button.disabled = false;
+            button.textContent = originalText;
+          }
+          setStatus(`Chyba: ${err.message}`, "error");
+        }
+      }
+
       let _sorterPage = 1;
       let _sorterFilter = "all";
 
@@ -741,6 +834,8 @@
             ai: "AI",
             headers: "Hlavičky",
             self: "Vlastní",
+            rule: "Pravidlo",
+            dashboard: "Dashboard",
           };
 
           const rows = data.items
@@ -758,6 +853,37 @@
                   : "outcome-rejected";
               const label = outcomeLabel[item.outcome] || item.outcome;
               const method = methodLabel[item.method] || item.method;
+              const moveButton =
+                item.outcome === "kept" && item.email_key
+                  ? `<div class="detail-actions">
+                      <button
+                        class="detail-action-btn"
+                        onclick='event.stopPropagation(); moveSorterEmailToSpam(${JSON.stringify(item.email_key)}, "content", this)'
+                      >
+                        Jen tento typ
+                      </button>
+                      <button
+                        class="detail-action-btn"
+                        onclick='event.stopPropagation(); moveSorterEmailToSpam(${JSON.stringify(item.email_key)}, "sender", this)'
+                      >
+                        Vždy od odesílatele
+                      </button>
+                    </div>`
+                  : "";
+              const removeRuleButton =
+                item.outcome === "moved" &&
+                item.email_key &&
+                item.rule_type &&
+                item.rule_value
+                  ? `<div class="detail-actions">
+                      <button
+                        class="detail-action-btn"
+                        onclick='event.stopPropagation(); removeSorterRule(${JSON.stringify(item.email_key)}, ${JSON.stringify(item.rule_type)}, ${JSON.stringify(item.rule_value)}, this)'
+                      >
+                        Zrušit pravidlo
+                      </button>
+                    </div>`
+                  : "";
               return `
               <tr class="history-row" onclick="toggleDetail('${idx}')">
                 <td style="color:#555;white-space:nowrap">${esc(time)}</td>
@@ -770,7 +896,9 @@
               <tr class="history-detail" id="detail-${idx}">
                 <td colspan="6">
                   <div class="detail-label">Původní email</div>
-                  <div class="detail-text">${esc(item.body || "—")}</div>
+                  <div class="detail-text">${esc(item.body_display || item.body || "—")}</div>
+                  ${moveButton}
+                  ${removeRuleButton}
                 </td>
               </tr>`;
             })

@@ -33,5 +33,6 @@ UPTIME_LOG = LOG_DIR / "uptime.jsonl"
 RESPONDER_LOG_DIR = LOG_DIR / "responder"
 RESPONDER_HISTORY_LOG = RESPONDER_LOG_DIR / "responses.jsonl"
 
-SORTER_LOG_DIR = LOG_DIR / "sorter"
+SORTER_LOG_DIR = DATA_DIR / "logs" / "sorter"
 SORTER_HISTORY_LOG = SORTER_LOG_DIR / "sorter.jsonl"
+SORTER_STATE_FILE = DATA_DIR / "sorter" / "state.json"

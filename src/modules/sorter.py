@@ -24,12 +24,14 @@ import logging
 import os
 import threading
 from datetime import datetime, timezone
+from typing import Optional
 
 from imapclient import IMAPClient
 from openai import OpenAI
 from telegram.ext import CommandHandler
 
-from src.config import SORTER_HISTORY_LOG
+from src.config import SORTER_HISTORY_LOG, SORTER_STATE_FILE
+from src.sorter_rules import add_move_rule_from_email, delete_move_rule, match_move_rule
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +41,7 @@ IMAP_USER = os.getenv("IMAP_USER", "")
 IMAP_PASSWORD = os.getenv("IMAP_PASSWORD", "")
 TARGET_FOLDER = os.getenv("SORTER_TARGET_FOLDER", "others")
 MANUAL_SORT_LIMIT = int(os.getenv("SORTER_MANUAL_LIMIT", "200"))
+SORTER_HISTORY_MAX_ITEMS = int(os.getenv("SORTER_HISTORY_MAX_ITEMS", "10000"))
 
 NEWSLETTER_HEADERS = ("List-Unsubscribe", "List-ID", "List-Post")
 
@@ -55,10 +58,12 @@ MOVE = vše ostatní: newslettery, hromadné emaily, marketingové nabídky, nov
 Odpověz pouze: KEEP nebo MOVE"""
 
 HISTORY_FILE = SORTER_HISTORY_LOG
+STATE_FILE = SORTER_STATE_FILE
 
 _ai_client = None
 _bot = None  # uložíme při setup pro případné budoucí Telegram notifikace
 _process_lock = threading.Lock()
+_startup_cursor_primed = False
 
 
 def _semantic_key(sender: str, subject: str, body: str) -> str:
@@ -78,50 +83,148 @@ def _message_key(msg, raw: bytes) -> tuple[str, str]:
 
 
 def _load_logged_sort_keys() -> tuple[set[str], set[str]]:
-    logged_sort_keys = set()
-    logged_sort_semantic_keys = set()
-    if not HISTORY_FILE.exists():
-        return logged_sort_keys, logged_sort_semantic_keys
+    """
+    Vrací dvě množiny klíčů:
+    - moved_keys: email_key emailů s outcome='moved' — tyto přeskočíme (jsou ve spamu)
+    - moved_semantic_keys: semantic_key emailů s outcome='moved' — přeskočíme i sémantické duplikáty
 
+    Emaily s outcome='kept' záměrně NEpřeskakujeme, aby po vytvoření nového pravidla
+    mohl sorter při dalším průchodu přesunout i dříve ponechané emaily.
+    """
+    moved_keys: set[str] = set()
+    moved_semantic_keys: set[str] = set()
+    if not HISTORY_FILE.exists():
+        return moved_keys, moved_semantic_keys
+
+    # Pro každý email_key chceme znát jeho aktuální outcome (poslední záznam vyhrává).
+    latest: dict[str, dict] = {}
     with open(HISTORY_FILE, encoding="utf-8") as f:
         for line in f:
             try:
                 record = json.loads(line)
             except json.JSONDecodeError:
                 continue
+            key = record.get("email_key")
+            if key:
+                latest[key] = record
 
-            if record.get("email_key"):
-                logged_sort_keys.add(record["email_key"])
-            logged_sort_semantic_keys.add(_semantic_key(
+    for record in latest.values():
+        if record.get("outcome") == "moved":
+            moved_keys.add(record["email_key"])
+            moved_semantic_keys.add(_semantic_key(
                 record.get("from", ""),
                 record.get("subject", ""),
                 record.get("body", ""),
             ))
-    return logged_sort_keys, logged_sort_semantic_keys
+    return moved_keys, moved_semantic_keys
 
 
-def _log_sort(sender: str, subject: str, body: str, decision: str, method: str, message_id: str, email_key: str):
-    """Uloží výsledek třídění do logs/sorter/sorter.jsonl."""
+def _load_state() -> dict:
+    if not STATE_FILE.exists():
+        return {}
+    try:
+        with open(STATE_FILE, encoding="utf-8") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError):
+        logger.warning("[sorter] State file nelze načíst, obnovím ho při dalším průchodu.")
+        return {}
+
+
+def _save_state(state: dict):
+    STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with open(STATE_FILE, "w", encoding="utf-8") as f:
+        json.dump(state, f, ensure_ascii=False)
+
+
+def _get_last_seen_uid() -> int:
+    value = _load_state().get("last_seen_uid")
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _set_last_seen_uid(uid: int):
+    current = _get_last_seen_uid()
+    if uid <= current:
+        return
+    _save_state({
+        "last_seen_uid": uid,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    })
+
+
+def _get_highest_inbox_uid(conn: IMAPClient) -> int:
+    conn.select_folder("INBOX")
+    uids = conn.search(["ALL"])
+    if not uids:
+        return 0
+    return max(int(uid) for uid in uids)
+
+
+def _log_sort(
+    sender: str,
+    subject: str,
+    body: str,
+    decision: str,
+    method: str,
+    message_id: str,
+    email_key: str,
+    *,
+    uid: str = "",
+    folder: str = "INBOX",
+    list_id: str = "",
+    rule_type: str = "",
+    rule_value: str = "",
+    force: bool = False,
+):
+    """Uloží výsledek třídění do persistentní sorter historie."""
     HISTORY_FILE.parent.mkdir(parents=True, exist_ok=True)
     logged_sort_keys, logged_sort_semantic_keys = _load_logged_sort_keys()
     semantic_key = _semantic_key(sender, subject, body)
-    if email_key in logged_sort_keys or semantic_key in logged_sort_semantic_keys:
+    if not force and (email_key in logged_sort_keys or semantic_key in logged_sort_semantic_keys):
         return
 
     record = {
         "time": datetime.now(timezone.utc).isoformat(),
+        "uid": uid,
+        "folder": folder,
         "message_id": message_id,
         "email_key": email_key,
         "semantic_key": semantic_key,
+        "list_id": list_id,
         "from": sender,
         "subject": subject,
         "body": body,
+        "body_display": body[:1000] if body else "",
         "decision": decision,   # KEEP / MOVE
         "method": method,       # ai / headers / self
+        "rule_type": rule_type,
+        "rule_value": rule_value,
         "outcome": "kept" if decision == "KEEP" else "moved",
     }
     with open(HISTORY_FILE, "a", encoding="utf-8") as f:
         f.write(json.dumps(record, ensure_ascii=False) + "\n")
+    _trim_history_file()
+
+
+def _trim_history_file():
+    if SORTER_HISTORY_MAX_ITEMS <= 0 or not HISTORY_FILE.exists():
+        return
+
+    lines = HISTORY_FILE.read_text(encoding="utf-8").splitlines()
+    overflow = len(lines) - SORTER_HISTORY_MAX_ITEMS
+    if overflow <= 0:
+        return
+
+    HISTORY_FILE.write_text(
+        "\n".join(lines[-SORTER_HISTORY_MAX_ITEMS:]) + "\n",
+        encoding="utf-8",
+    )
+    logger.info(
+        "[sorter] Historie oříznuta na posledních "
+        f"{SORTER_HISTORY_MAX_ITEMS} záznamů (odstraněno {overflow})."
+    )
 
 
 def _get_ai_client():
@@ -155,6 +258,13 @@ def _extract_body(msg) -> str:
                 payload = part.get_payload(decode=True)
                 if payload:
                     return payload.decode("utf-8", errors="replace")
+        # Fallback na HTML část — odstraní tagy pro čitelný text
+        for part in msg.walk():
+            if part.get_content_type() == "text/html":
+                payload = part.get_payload(decode=True)
+                if payload:
+                    html = payload.decode("utf-8", errors="replace")
+                    return re.sub(r"<[^>]+>", " ", html).strip()
     payload = msg.get_payload(decode=True)
     if payload:
         return payload.decode("utf-8", errors="replace")
@@ -197,7 +307,10 @@ def _process_uids(conn: IMAPClient, uids: list[int], label: str) -> dict:
     logged_sort_keys, logged_sort_semantic_keys = _load_logged_sort_keys()
     messages = conn.fetch(uids, ["BODY.PEEK[]"])
 
+    max_seen_uid = 0
+
     for uid, data in messages.items():
+        max_seen_uid = max(max_seen_uid, int(uid))
         try:
             raw = data[b"BODY[]"]
             msg = email_lib.message_from_bytes(raw)
@@ -205,6 +318,9 @@ def _process_uids(conn: IMAPClient, uids: list[int], label: str) -> dict:
             subject = _decode_header(msg.get("Subject", "(bez předmětu)"))
             sender = _decode_header(msg.get("From", ""))
             message_id, email_key = _message_key(msg, raw)
+            folder = "INBOX"
+            uid_str = str(uid)
+            list_id = _decode_header(msg.get("List-ID", ""))
             if email_key in logged_sort_keys:
                 stats["skipped"] += 1
                 continue
@@ -212,18 +328,61 @@ def _process_uids(conn: IMAPClient, uids: list[int], label: str) -> dict:
             # Emaily od sebe sama vždy ponechat (vlastní newslettery apod.)
             if IMAP_USER and IMAP_USER.lower() in sender.lower():
                 logger.info(f"[sorter] KEEP/self     | {sender} | {subject}")
-                _log_sort(sender, subject, "", "KEEP", "self", message_id, email_key)
+                _log_sort(
+                    sender,
+                    subject,
+                    "",
+                    "KEEP",
+                    "self",
+                    message_id,
+                    email_key,
+                    uid=uid_str,
+                    folder=folder,
+                    list_id=list_id,
+                )
                 stats["kept"] += 1
+                continue
+
+            body = _extract_body(msg)
+            rule = match_move_rule(sender, subject, body)
+            if rule:
+                logger.info(f"[sorter] MOVE/rule     | {sender} | {subject}")
+                conn.move([uid], TARGET_FOLDER)
+                _log_sort(
+                    sender,
+                    subject,
+                    body,
+                    "MOVE",
+                    "rule",
+                    message_id,
+                    email_key,
+                    uid=uid_str,
+                    folder=folder,
+                    list_id=list_id,
+                    rule_type=rule["rule_type"],
+                    rule_value=rule["rule_value"],
+                )
+                stats["moved"] += 1
                 continue
 
             if _is_newsletter(msg):
                 logger.info(f"[sorter] MOVE/hlavičky | {sender} | {subject}")
                 conn.move([uid], TARGET_FOLDER)
-                _log_sort(sender, subject, "", "MOVE", "headers", message_id, email_key)
+                _log_sort(
+                    sender,
+                    subject,
+                    "",
+                    "MOVE",
+                    "headers",
+                    message_id,
+                    email_key,
+                    uid=uid_str,
+                    folder=folder,
+                    list_id=list_id,
+                )
                 stats["moved"] += 1
                 continue
 
-            body = _extract_body(msg)
             if _semantic_key(sender, subject, body) in logged_sort_semantic_keys:
                 stats["skipped"] += 1
                 continue
@@ -237,12 +396,230 @@ def _process_uids(conn: IMAPClient, uids: list[int], label: str) -> dict:
                 logger.info(f"[sorter] MOVE/AI       | {sender} | {subject}")
                 conn.move([uid], TARGET_FOLDER)
                 stats["moved"] += 1
-            _log_sort(sender, subject, body, decision, "ai", message_id, email_key)
+            _log_sort(
+                sender,
+                subject,
+                body,
+                decision,
+                "ai",
+                message_id,
+                email_key,
+                uid=uid_str,
+                folder=folder,
+                list_id=list_id,
+            )
         except Exception as e:
             stats["errors"] += 1
             logger.error(f"[sorter] Chyba při zpracování UID {uid} ({label}): {e}", exc_info=True)
 
+    if max_seen_uid:
+        _set_last_seen_uid(max_seen_uid)
+
     return stats
+
+
+def _find_history_record(email_key: str) -> Optional[dict]:
+    if not email_key or not HISTORY_FILE.exists():
+        return None
+
+    with open(HISTORY_FILE, encoding="utf-8") as f:
+        lines = f.read().splitlines()
+
+    for line in reversed(lines):
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if record.get("email_key") == email_key:
+            return record
+    return None
+
+
+def _find_uid_in_target_folder(conn: IMAPClient, message_id: str, fallback_uid: str) -> Optional[int]:
+    conn.select_folder(TARGET_FOLDER)
+
+    if message_id:
+        matches = conn.search(["HEADER", "Message-ID", message_id])
+        if matches:
+            return int(matches[-1])
+
+    if fallback_uid:
+        try:
+            uid_int = int(fallback_uid)
+        except (TypeError, ValueError):
+            return None
+
+        if uid_int in conn.search(["ALL"]):
+            return uid_int
+
+    return None
+
+
+def move_kept_email_to_spam(email_key: str, rule_mode: str = "content") -> dict:
+    """
+    Ruční korekce z dashboardu:
+    1. přesune konkrétní email do spam složky
+    2. uloží pravidlo MOVE pro další podobné emaily
+    """
+    with _process_lock:
+        record = _find_history_record(email_key)
+        if not record:
+            raise ValueError("Email v historii sorteru nebyl nalezen.")
+        if record.get("outcome") != "kept":
+            raise ValueError("Přesun do spamu je povolen jen pro dříve ponechané emaily.")
+
+        stored_uid = record.get("uid")
+        message_id = record.get("message_id", "")
+        folder = record.get("folder") or "INBOX"
+
+        sender = record.get("from", "")
+        subject = record.get("subject", "")
+        body = record.get("body", "")
+        list_id = record.get("list_id", "")
+        rule = add_move_rule_from_email(
+            sender,
+            subject,
+            body,
+            rule_mode=rule_mode,
+            source="dashboard",
+        )
+
+        conn = _connect()
+        try:
+            conn.select_folder(folder)
+            # Najdi aktuální UID emailu v dané složce — uložené UID může být zastaralé
+            # po předchozím přesunu (IMAP přiřazuje nové UID při každém přesunu mezi složkami).
+            actual_uid = None
+            if message_id:
+                matches = conn.search(["HEADER", "Message-ID", message_id])
+                if matches:
+                    actual_uid = int(matches[-1])
+            if actual_uid is None and stored_uid:
+                try:
+                    candidate = int(stored_uid)
+                    if candidate in conn.search(["ALL"]):
+                        actual_uid = candidate
+                except (TypeError, ValueError):
+                    pass
+            if actual_uid is None:
+                raise ValueError("Email nebyl nalezen v složce, nelze ho přesunout do spamu.")
+            conn.move([actual_uid], TARGET_FOLDER)
+        finally:
+            conn.logout()
+
+        _log_sort(
+            sender,
+            subject,
+            body,
+            "MOVE",
+            "dashboard",
+            message_id,
+            email_key,
+            uid=str(actual_uid),
+            folder=folder,
+            list_id=list_id,
+            rule_type=rule["rule_type"],
+            rule_value=rule["rule_value"],
+            force=True,
+        )
+
+        logger.info(
+            f"[sorter] Dashboard přesunul email {email_key} do '{TARGET_FOLDER}' "
+            f"a uložil pravidlo {rule['rule_type']}={rule['rule_value']}"
+        )
+        return {
+            "email_key": email_key,
+            "spam_folder": TARGET_FOLDER,
+            "rule_type": rule["rule_type"],
+            "rule_value": rule["rule_value"],
+            "rule_created": rule["created"],
+        }
+
+
+def _update_history_record_to_kept(email_key: str, new_uid: str) -> None:
+    """Přepíše poslední 'moved' záznam daného email_key na 'kept' přímo v souboru."""
+    if not HISTORY_FILE.exists():
+        return
+    lines = HISTORY_FILE.read_text(encoding="utf-8").splitlines()
+    updated = False
+    for i in range(len(lines) - 1, -1, -1):
+        try:
+            record = json.loads(lines[i])
+        except json.JSONDecodeError:
+            continue
+        if record.get("email_key") == email_key and record.get("outcome") == "moved":
+            record["outcome"] = "kept"
+            record["decision"] = "KEEP"
+            record["folder"] = "INBOX"
+            record["uid"] = new_uid
+            record["rule_type"] = ""
+            record["rule_value"] = ""
+            lines[i] = json.dumps(record, ensure_ascii=False)
+            updated = True
+            break
+    if updated:
+        HISTORY_FILE.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def remove_rule_and_restore_email(email_key: str, rule_type: str, rule_value: str) -> dict:
+    """
+    Zruší MOVE pravidlo a pokusí se vrátit konkrétní email ze spam složky zpět do INBOX.
+    """
+    with _process_lock:
+        # Hledáme poslední záznam s outcome=="moved" — ne jen poslední záznam celkově,
+        # protože po úspěšném restore se zapíše nový "kept" záznam se stejným email_key.
+        record = None
+        if HISTORY_FILE.exists():
+            with open(HISTORY_FILE, encoding="utf-8") as f:
+                lines = f.read().splitlines()
+            for line in reversed(lines):
+                try:
+                    r = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if r.get("email_key") == email_key and r.get("outcome") == "moved":
+                    record = r
+                    break
+        if not record:
+            raise ValueError("Záznam o přesunutém emailu nebyl nalezen v historii.")
+
+        message_id = record.get("message_id", "")
+        fallback_uid = record.get("uid", "")
+        sender = record.get("from", "")
+        subject = record.get("subject", "")
+        body = record.get("body", "")
+        list_id = record.get("list_id", "")
+
+        conn = _connect()
+        try:
+            target_uid = _find_uid_in_target_folder(conn, message_id, fallback_uid)
+            email_found = target_uid is not None
+            if email_found:
+                conn.move([target_uid], "INBOX")
+        finally:
+            conn.logout()
+
+        deleted = delete_move_rule(rule_type, rule_value)
+
+        if not email_found and not deleted:
+            raise ValueError("Email ve spam složce nebyl nalezen a pravidlo také neexistuje — možná již bylo dříve zrušeno.")
+        if not email_found:
+            raise ValueError("Pravidlo bylo zrušeno, ale email ve spam složce už nebyl nalezen (mohl být smazán nebo přesunut).")
+
+        # Přepíšeme záznam v souboru: změníme outcome na "kept" a aktualizujeme uid/folder.
+        # Přidání nového řádku by spoléhalo na deduplikaci v API; přímý přepis je spolehlivější.
+        _update_history_record_to_kept(email_key, str(target_uid))
+
+        logger.info(
+            f"[sorter] Dashboard zrušil pravidlo {rule_type}={rule_value} "
+            f"a vrátil email {email_key} do 'INBOX'"
+        )
+        return {
+            "email_key": email_key,
+            "rule_type": rule_type,
+            "rule_value": rule_value,
+            "restored_to": "INBOX",
+        }
 
 
 def _process_unseen(conn: IMAPClient) -> dict:
@@ -253,8 +630,24 @@ def _process_unseen(conn: IMAPClient) -> dict:
         if not uids:
             return _empty_stats()
 
-        logger.info(f"[sorter] Zpracovávám {len(uids)} nových emailů...")
-        return _process_uids(conn, uids, "unseen")
+        last_seen_uid = _get_last_seen_uid()
+        if last_seen_uid > 0:
+            uids = [uid for uid in uids if int(uid) > last_seen_uid]
+            if not uids:
+                return _empty_stats()
+
+        stats = _process_uids(conn, uids, "unseen")
+        new = stats["kept"] + stats["moved"]
+        if new > 0:
+            logger.info(f"[sorter] Zpracováno {new} nových emailů (přeskočeno: {stats['skipped']})")
+        return stats
+
+
+def _prime_startup_cursor(conn: IMAPClient) -> int:
+    highest_uid = _get_highest_inbox_uid(conn)
+    _set_last_seen_uid(highest_uid)
+    logger.info(f"[sorter] Startup baseline nastaven na UID {highest_uid}. Staré UNSEEN nepřebírám automaticky.")
+    return highest_uid
 
 
 def _process_inbox(limit: int = MANUAL_SORT_LIMIT) -> dict:
@@ -285,8 +678,14 @@ async def _idle_loop():
         try:
             conn = _connect()
 
-            # Zpracuj emaily které přišly když agent nebyl připojený
-            _process_unseen(conn)
+            global _startup_cursor_primed
+            if not _startup_cursor_primed:
+                # Po novém startu procesu jen nastavíme baseline, aby redeploy/restart
+                # nespustil dotřídění starého inboxu. Nové maily po startu už pojedou normálně.
+                _prime_startup_cursor(conn)
+                _startup_cursor_primed = True
+            else:
+                _process_unseen(conn)
 
             # Zkus IDLE
             try:

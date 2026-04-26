@@ -217,12 +217,15 @@ def write_next_steps(values: dict[str, str], target: str, profile: str) -> None:
             "1. Link the directory to the correct Railway project/service:",
             "   `railway status`",
             "2. Import variables from `.env.railway` in Railway dashboard or CLI.",
-            "3. Deploy current code:",
+            "3. **Add a Volume** for persistent data (rules, state):",
+            "   Railway dashboard → service → Volumes → Add Volume → Mount Path: `/data`",
+            "   Then set env var: `railway variables set DATA_DIR=/data`",
+            "4. Deploy current code:",
             "   `railway up --detach --message \"Client launch\"`",
-            "4. Verify:",
+            "5. Verify:",
             "   `railway deployment list`",
             "   `railway logs --lines 120`",
-            "5. Open the public dashboard URL and check `/api/status`.",
+            "6. Open the public dashboard URL and check `/api/status`.",
             "",
         ]
 
@@ -394,8 +397,10 @@ def main() -> None:
     if target in ("railway", "both"):
         print("1. Ověř Railway link: railway status")
         print("2. Nahraj env hodnoty z .env.railway do Railway.")
-        print("3. Deploy: railway up --detach --message \"Client launch\"")
-        print("4. Ověř: railway deployment list && railway logs --lines 120")
+        print("3. Přidej Volume: Railway dashboard → Volumes → Add → Mount Path: /data")
+        print("   Nastav proměnnou: railway variables set DATA_DIR=/data")
+        print("4. Deploy: railway up --detach --message \"Client launch\"")
+        print("5. Ověř: railway deployment list && railway logs --lines 120")
     if target in ("launchd", "both"):
         print("1. Nainstaluj launchd: python3 scripts/install_launchd.py")
         print("2. Ověř logy: tail -f logs/agent.log logs/agent_err.log")

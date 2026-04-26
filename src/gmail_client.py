@@ -4,6 +4,7 @@ Gmail API client — čtení a odesílání emailů přes OAuth2.
 import base64
 import logging
 import os
+import re
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from pathlib import Path
@@ -118,12 +119,13 @@ def extract_body(payload):
             if data:
                 return base64.urlsafe_b64decode(data).decode("utf-8", errors="replace")
 
-    # Fallback na HTML část
+    # Fallback na HTML část — odstraní tagy pro čitelný text
     for part in payload.get("parts", []):
         if part["mimeType"] == "text/html":
             data = part.get("body", {}).get("data", "")
             if data:
-                return base64.urlsafe_b64decode(data).decode("utf-8", errors="replace")
+                html = base64.urlsafe_b64decode(data).decode("utf-8", errors="replace")
+                return re.sub(r"<[^>]+>", " ", html).strip()
 
     return ""
 

@@ -166,7 +166,9 @@ async def send_startup_message(context: ContextTypes.DEFAULT_TYPE):
     has_responder = any(name == "responder" for name, _ in modules)
     has_sorter = any(name == "sorter" for name, _ in modules)
     has_newsletter = any(name == "newsletter" for name, _ in modules)
-    cmds = ["/check"]
+    cmds = []
+    if has_responder:
+        cmds.append("/check")
     if has_sorter:
         cmds.append("/sort")
     if has_responder:
@@ -202,8 +204,10 @@ def main():
     for name, mod in modules:
         mod.setup(app)
 
-    # Globální /check handler
-    app.add_handler(CommandHandler("check", cmd_check))
+    # Globální /check handler — jen pokud je responder aktivní
+    has_responder = any(name == "responder" for name, _ in modules)
+    if has_responder:
+        app.add_handler(CommandHandler("check", cmd_check))
 
     app.job_queue.run_once(send_startup_message, when=5)
     app.job_queue.run_repeating(scheduled_check, interval=CHECK_INTERVAL, first=10)

@@ -23,6 +23,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
 
 from src.config import LOG_DIR, RESPONDER_HISTORY_LOG, SORTER_HISTORY_LOG, TEMPLATES_DIR
+from src.modules.sorter import move_kept_email_to_spam, remove_rule_and_restore_email
 from src.notifier import get_pending_item, get_queue_remaining, resolve_approval, get_alerts, clear_alert, get_unpin_callback
 
 logger = logging.getLogger(__name__)
@@ -72,10 +73,12 @@ def api_status(request: Request):
     _check_token(request)
     item = get_pending_item()
     auto_respond = os.getenv("AUTO_RESPOND", "false").lower() == "true"
+    responder_enabled = os.getenv("MODULE_RESPONDER", "true").lower() == "true"
     return {
         "mail_client": MAIL_CLIENT,
         "dry_run": DRY_RUN,
         "auto_respond": auto_respond,
+        "responder_enabled": responder_enabled,
         "queue_remaining": get_queue_remaining(),
         "alerts": get_alerts(),
         "pending": {
@@ -186,7 +189,11 @@ def _dedupe_sorter_items(items: list[dict]) -> list[dict]:
 @app.get("/api/sorter-history")
 def api_sorter_history(request: Request, page: int = 1, per_page: int = 50, filter: str = "all"):
     _check_token(request)
-    history_file = _first_existing_path(SORTER_HISTORY_LOG, LOG_DIR / "sorter.jsonl")
+    history_file = _first_existing_path(
+        SORTER_HISTORY_LOG,
+        LOG_DIR / "sorter" / "sorter.jsonl",
+        LOG_DIR / "sorter.jsonl",
+    )
     if not history_file.exists():
         return {"items": [], "total": 0, "page": page, "per_page": per_page, "pages": 0}
     lines = history_file.read_text(encoding="utf-8").splitlines()
@@ -217,6 +224,54 @@ def api_sorter_history(request: Request, page: int = 1, per_page: int = 50, filt
         "per_page": per_page,
         "pages": pages,
     }
+
+
+@app.post("/api/sorter/move-to-spam")
+async def api_sorter_move_to_spam(request: Request):
+    _check_token(request)
+    payload = await request.json()
+    email_key = (payload.get("email_key") or "").strip()
+    rule_mode = (payload.get("rule_mode") or "content").strip().lower()
+    if not email_key:
+        raise HTTPException(status_code=400, detail="Chybí email_key.")
+
+    try:
+        result = move_kept_email_to_spam(email_key, rule_mode=rule_mode)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.error(f"Dashboard move-to-spam selhal pro {email_key}: {exc}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Přesun do spamu selhal.") from exc
+
+    return {"ok": True, **result}
+
+
+@app.post("/api/sorter/remove-rule")
+async def api_sorter_remove_rule(request: Request):
+    _check_token(request)
+    payload = await request.json()
+    email_key = (payload.get("email_key") or "").strip()
+    rule_type = (payload.get("rule_type") or "").strip()
+    rule_value = (payload.get("rule_value") or "").strip()
+    if not email_key:
+        raise HTTPException(status_code=400, detail="Chybí email_key.")
+    if not rule_type:
+        raise HTTPException(status_code=400, detail="Chybí rule_type.")
+    if not rule_value:
+        raise HTTPException(status_code=400, detail="Chybí rule_value.")
+
+    try:
+        result = remove_rule_and_restore_email(email_key, rule_type, rule_value)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.error(
+            f"Dashboard remove-rule selhal pro {email_key} / {rule_type}={rule_value}: {exc}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=500, detail="Zrušení pravidla selhalo.") from exc
+
+    return {"ok": True, **result}
 
 
 @app.post("/api/reject")
