@@ -41,12 +41,38 @@ Přehled verzí nasazených na tuto klientskou instanci.
 
 ---
 
-## v1 — [datum první nasazení]
+## v2.1 — 2026-04-26
 
-**Template commit:** `9b791f0`
+**Commits:** `c509184`, `19129c5`
 **Nasazeno:** Railway
 
-Počáteční nasazení. Sorter, základní dashboard, Telegram approval flow.
+- dashboard: nadpis přejmenován na "Mail agent Venture"
+- sorter: oprava chybějícího `import re` v `_extract_body`
+
+---
+
+## v1 — 2026-04-22
+
+**Template commit:** `e65357b`
+**Nasazeno:** Railway
+
+Počáteční nasazení. Projekt převeden na reusable template šablonu.
+
+### Historie vývoje (před Railway nasazením)
+
+| Datum      | Commit    | Co přibylo                                                    |
+| ---------- | --------- | ------------------------------------------------------------- |
+| 2026-03-30 | `3a87183` | Initial commit — Gmail API, GPT-4o mini, Telegram notifikace  |
+| 2026-04-13 | `aee1b1d` | Znalostní báze, projektová šablona, mail klienti              |
+| 2026-04-15 | `962071d` | KB, učení agenta, shadow mode                                 |
+| 2026-04-16 | `cc79757` | Mail client abstrakce, kb_loader, async /yes flow             |
+| 2026-04-16 | `4e367c0` | Klasifikace A1-B2/ESC/UNK, response prompty                   |
+| 2026-04-17 | `605c4dc` | Dashboard unpin Telegram on dismiss, UI polish                |
+| 2026-04-18 | `8123620` | Newsletter modul — real estate leads Morava                   |
+| 2026-04-20 | `b4e55ca` | IMAP UID tracking, asyncio loop, ESC/UNK složky, multi-folder |
+| 2026-04-20 | `5aa6707` | Reorganizace tests/, README dokumentace                       |
+| 2026-04-22 | `566afbf` | Railway web port pro dashboard                                |
+| 2026-04-23 | `9b791f0` | Client setup wizards                                          |
 
 ---
 
