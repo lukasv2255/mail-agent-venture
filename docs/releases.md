@@ -3,10 +3,41 @@
 Přehled verzí nasazených na tuto klientskou instanci.
 Šablona: `github.com/lukasv2255/mail-agent`
 
+## Rollback na konkrétní verzi
+
+Každý release má dva SHA — jeden pro šablonu, jeden pro tuto instanci.
+Obojí musíš resetovat, aby šlo vyvíjet dál ze stejné základny:
+
+```bash
+# 1. Šablona
+cd ~/claude-code/mail-agent
+git checkout <template-commit>
+
+# 2. Instance
+cd ~/claude-code/mail-agent-venture
+git checkout <venture-commit>
+```
+
+Po rollbacku **vytvoř novou větev** (např. `hotfix/v2.1`) — nevyvíjej na detached HEAD.
+
+---
+
+## v2.1 — 2026-04-26 ← aktuální
+
+**Venture commit:** `19129c5`
+**Template commit:** `81def9c`
+**Nasazeno:** Railway
+
+### Co je nového
+
+- dashboard: nadpis přejmenován na "Mail agent Venture"
+- sorter: oprava chybějícího `import re` v `_extract_body`
+
 ---
 
 ## v2 — 2026-04-26
 
+**Venture commit:** `2764c7d`
 **Template commit:** `81def9c`
 **Nasazeno:** Railway
 
@@ -41,18 +72,9 @@ Přehled verzí nasazených na tuto klientskou instanci.
 
 ---
 
-## v2.1 — 2026-04-26
-
-**Commits:** `c509184`, `19129c5`
-**Nasazeno:** Railway
-
-- dashboard: nadpis přejmenován na "Mail agent Venture"
-- sorter: oprava chybějícího `import re` v `_extract_body`
-
----
-
 ## v1 — 2026-04-22
 
+**Venture commit:** `e65357b`
 **Template commit:** `e65357b`
 **Nasazeno:** Railway
 
@@ -79,9 +101,10 @@ Počáteční nasazení. Projekt převeden na reusable template šablonu.
 ## Jak přidávat nový release
 
 ```
-## vN — YYYY-MM-DD
+## vN — YYYY-MM-DD ← aktuální  (předchozí ← aktuální odeber)
 
-**Template commit:** `<git sha>`
+**Venture commit:** `<git sha z mail-agent-venture>`
+**Template commit:** `<git sha z mail-agent>`
 **Nasazeno:** Railway / launchd
 
 ### Co je nového
