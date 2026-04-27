@@ -31,8 +31,8 @@ from imapclient import IMAPClient
 from openai import OpenAI
 from telegram.ext import CommandHandler
 
-from src.config import SORTER_HISTORY_LOG, SORTER_STATE_FILE
-from src.sorter_rules import add_move_rule_from_email, delete_move_rule, match_move_rule
+from src.config import PROJECT_ROOT, SORTER_HISTORY_LOG, SORTER_STATE_FILE
+from src.sorter_rules import add_keep_rule, add_move_rule_from_email, delete_move_rule, match_keep_rule, match_move_rule
 
 logger = logging.getLogger(__name__)
 
@@ -46,17 +46,15 @@ SORTER_HISTORY_MAX_ITEMS = int(os.getenv("SORTER_HISTORY_MAX_ITEMS", "10000"))
 
 NEWSLETTER_HEADERS = ("List-Unsubscribe", "List-ID", "List-Post")
 
-CLASSIFIER_PROMPT = """Jsi asistent třídící e-maily.
+_CLASSIFIER_PROMPT_FILE = PROJECT_ROOT / "prompts" / "sorter" / "classifier_prompt.txt"
 
-Odpověz POUZE slovem KEEP nebo MOVE.
+def _load_classifier_prompt() -> str:
+    if _CLASSIFIER_PROMPT_FILE.exists():
+        return _CLASSIFIER_PROMPT_FILE.read_text(encoding="utf-8").strip()
+    logger.warning("[sorter] classifier_prompt.txt nenalezen, používám výchozí prompt")
+    return "Jsi asistent třídící e-maily. Odpověz POUZE slovem KEEP nebo MOVE. KEEP = relevantní obchodní email. MOVE = vše ostatní."
 
-KEEP = e-mail je osobní obchodní nabídka nebo poptávka služeb adresovaná přímo příjemci
-       (např. nabídka spolupráce, B2B poptávka, žádost o schůzku nebo call)
-
-MOVE = vše ostatní: newslettery, hromadné emaily, marketingové nabídky, novinky,
-       automatické zprávy, spam, soukromé emaily, faktury, systémové notifikace
-
-Odpověz pouze: KEEP nebo MOVE"""
+CLASSIFIER_PROMPT = _load_classifier_prompt()
 
 HISTORY_FILE = SORTER_HISTORY_LOG
 STATE_FILE = SORTER_STATE_FILE
@@ -366,6 +364,26 @@ def _process_uids(conn: IMAPClient, uids: list[int], label: str) -> dict:
                 stats["moved"] += 1
                 continue
 
+            keep_rule = match_keep_rule(sender)
+            if keep_rule:
+                logger.info(f"[sorter] KEEP/rule     | {sender} | {subject}")
+                _log_sort(
+                    sender,
+                    subject,
+                    body,
+                    "KEEP",
+                    "rule",
+                    message_id,
+                    email_key,
+                    uid=uid_str,
+                    folder=folder,
+                    list_id=list_id,
+                    rule_type=keep_rule["rule_type"],
+                    rule_value=keep_rule["rule_value"],
+                )
+                stats["kept"] += 1
+                continue
+
             if _is_newsletter(msg):
                 logger.info(f"[sorter] MOVE/hlavičky | {sender} | {subject}")
                 conn.move([uid], TARGET_FOLDER)
@@ -384,7 +402,7 @@ def _process_uids(conn: IMAPClient, uids: list[int], label: str) -> dict:
                 stats["moved"] += 1
                 continue
 
-            if _semantic_key(sender, subject, body) in logged_sort_semantic_keys:
+            if not message_id and _semantic_key(sender, subject, body) in logged_sort_semantic_keys:
                 stats["skipped"] += 1
                 continue
 
@@ -620,6 +638,54 @@ def remove_rule_and_restore_email(email_key: str, rule_type: str, rule_value: st
             "rule_type": rule_type,
             "rule_value": rule_value,
             "restored_to": "INBOX",
+        }
+
+
+def restore_and_keep(email_key: str) -> dict:
+    """
+    Vrátí email ze spam složky do INBOX a vytvoří KEEP pravidlo pro odesílatele.
+    Funguje i pro emaily přesunuté AI (bez existujícího DB pravidla).
+    """
+    with _process_lock:
+        record = None
+        if HISTORY_FILE.exists():
+            with open(HISTORY_FILE, encoding="utf-8") as f:
+                lines = f.read().splitlines()
+            for line in reversed(lines):
+                try:
+                    r = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if r.get("email_key") == email_key and r.get("outcome") == "moved":
+                    record = r
+                    break
+        if not record:
+            raise ValueError("Záznam o přesunutém emailu nebyl nalezen v historii.")
+
+        message_id = record.get("message_id", "")
+        fallback_uid = record.get("uid", "")
+        sender = record.get("from", "")
+
+        conn = _connect()
+        try:
+            target_uid = _find_uid_in_target_folder(conn, message_id, fallback_uid)
+            if target_uid is None:
+                raise ValueError("Email ve spam složce nebyl nalezen (mohl být smazán nebo přesunut).")
+            conn.move([target_uid], "INBOX")
+        finally:
+            conn.logout()
+
+        keep_rule = add_keep_rule(sender, source="dashboard")
+        _update_history_record_to_kept(email_key, str(target_uid))
+
+        logger.info(
+            f"[sorter] Dashboard vrátil email {email_key} do INBOX "
+            f"a vytvořil KEEP pravidlo pro {sender}"
+        )
+        return {
+            "email_key": email_key,
+            "restored_to": "INBOX",
+            "keep_rule": keep_rule,
         }
 
 
