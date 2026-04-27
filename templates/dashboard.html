@@ -399,25 +399,68 @@
       <span id="meta-queue" style="color: #666"></span>
     </div>
 
+    <!-- Tab navigace -->
     <div
       style="
         display: flex;
-        gap: 24px;
-        align-items: flex-start;
+        gap: 8px;
         margin-top: 16px;
+        margin-bottom: 24px;
+        border-bottom: 1px solid #222;
       "
     >
-      <!-- Levý panel: pravidla -->
-      <div id="rules-section" style="flex: 0 0 280px; min-width: 0"></div>
+      <a
+        id="tab-sorter"
+        href="#"
+        onclick="
+          showTab('sorter');
+          return false;
+        "
+        style="
+          padding: 8px 16px;
+          text-decoration: none;
+          font-size: 13px;
+          border-radius: 6px 6px 0 0;
+          border: 1px solid #222;
+          border-bottom: none;
+          margin-bottom: -1px;
+        "
+      >
+        🗂 Sorter
+      </a>
+      <a
+        id="tab-rules"
+        href="#"
+        onclick="
+          showTab('rules');
+          return false;
+        "
+        style="
+          padding: 8px 16px;
+          text-decoration: none;
+          font-size: 13px;
+          border-radius: 6px 6px 0 0;
+          border: 1px solid #222;
+          border-bottom: none;
+          margin-bottom: -1px;
+        "
+      >
+        📋 Pravidla
+      </a>
+    </div>
 
-      <!-- Hlavní obsah -->
-      <div style="flex: 1; min-width: 0">
-        <div id="pending-card" class="empty">Načítám...</div>
-        <div id="esc-section"></div>
-        <div id="unk-section"></div>
-        <div id="history-section" style="margin-top: 32px"></div>
-        <div id="sorter-history-section" style="margin-top: 32px"></div>
-      </div>
+    <!-- Sorter view -->
+    <div id="view-sorter">
+      <div id="pending-card" class="empty">Načítám...</div>
+      <div id="esc-section"></div>
+      <div id="unk-section"></div>
+      <div id="history-section" style="margin-top: 32px"></div>
+      <div id="sorter-history-section" style="margin-top: 32px"></div>
+    </div>
+
+    <!-- Rules view -->
+    <div id="view-rules" style="display: none">
+      <div id="rules-section"></div>
     </div>
 
     <div id="status"></div>
@@ -425,6 +468,21 @@
     <script>
       const REFRESH_MS = 5000;
       let _isPolling = false;
+
+      function showTab(tab) {
+        document.getElementById("view-sorter").style.display =
+          tab === "sorter" ? "" : "none";
+        document.getElementById("view-rules").style.display =
+          tab === "rules" ? "" : "none";
+        const active = "background:#111;color:#4caf50;border-color:#333";
+        const inactive = "background:transparent;color:#888;border-color:#222";
+        document.getElementById("tab-sorter").style.cssText +=
+          ";" + (tab === "sorter" ? active : inactive);
+        document.getElementById("tab-rules").style.cssText +=
+          ";" + (tab === "rules" ? active : inactive);
+        if (tab === "rules") refreshRules();
+      }
+      showTab("sorter");
 
       async function refresh() {
         try {
