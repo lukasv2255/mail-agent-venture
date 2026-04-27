@@ -1,5 +1,5 @@
 """
-Odešle 30 testovacích emailů na TEST_TARGET_EMAIL.
+Odešle 30 testovacích emailů na IMAP_USER (inbox agenta).
   - 12x spam (MOVE)
   -  8x poptávka služby (KEEP)
   - 10x e-shop newsletter / propagační email (MOVE)
@@ -20,7 +20,7 @@ load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
 from src.gmail_client import get_gmail_service
 
-TARGET = os.getenv("TEST_TARGET_EMAIL", os.getenv("GMAIL_ADDRESS", ""))
+TARGET = os.getenv("IMAP_USER", "")
 
 TEST_EMAILS = [
     # ── SPAM (MOVE) ────────────────────────────────────────────────────────────

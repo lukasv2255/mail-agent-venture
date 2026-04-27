@@ -847,6 +847,36 @@
         }
       }
 
+      async function restoreAndKeep(emailKey, button) {
+        if (!emailKey) return;
+        const originalText = button ? button.textContent : "";
+        if (button) {
+          button.disabled = true;
+          button.textContent = "Vracím...";
+        }
+        try {
+          const res = await fetch("/api/sorter/restore-and-keep", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email_key: emailKey }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+          const nextFilter = _sorterFilter === "moved" ? "all" : _sorterFilter;
+          setStatus(
+            "Email vrácen do inboxu a odesílatel přidán do KEEP pravidel.",
+            "ok",
+          );
+          await refreshSorterHistory(1, nextFilter);
+        } catch (err) {
+          if (button) {
+            button.disabled = false;
+            button.textContent = originalText;
+          }
+          setStatus(`Chyba: ${err.message}`, "error");
+        }
+      }
+
       async function removeSorterRule(emailKey, ruleType, ruleValue, button) {
         if (!emailKey || !ruleType || !ruleValue) return;
         const originalText = button ? button.textContent : "";
@@ -957,6 +987,17 @@
                       </button>
                     </div>`
                   : "";
+              const restoreAndKeepButton =
+                item.outcome === "moved" && item.email_key && !item.rule_type
+                  ? `<div class="detail-actions">
+                      <button
+                        class="detail-action-btn"
+                        onclick='event.stopPropagation(); restoreAndKeep(${JSON.stringify(item.email_key)}, this)'
+                      >
+                        Vrátit a vždy ponechat
+                      </button>
+                    </div>`
+                  : "";
               return `
               <tr class="history-row" onclick="toggleDetail('${idx}')">
                 <td style="color:#555;white-space:nowrap">${esc(time)}</td>
@@ -972,6 +1013,7 @@
                   <div class="detail-text">${esc(item.body_display || item.body || "—")}</div>
                   ${moveButton}
                   ${removeRuleButton}
+                  ${restoreAndKeepButton}
                 </td>
               </tr>`;
             })

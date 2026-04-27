@@ -21,7 +21,7 @@ load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
 from src.gmail_client import get_gmail_service
 
-TARGET = os.getenv("TEST_TARGET_EMAIL", "")
+TARGET = os.getenv("IMAP_USER", "")
 SENDER_TAG = "reapply-test"
 
 EMAILS = [
@@ -56,7 +56,7 @@ def send_emails(service):
 
 def main():
     if not TARGET:
-        print("Chyba: nastav TEST_TARGET_EMAIL v .env (adresa inboxu agenta, např. johnybb11@seznam.cz)")
+        print("Chyba: nastav IMAP_USER v .env (adresa inboxu agenta, např. johnybb11@seznam.cz)")
         sys.exit(1)
 
     print("POZOR: Před spuštěním tohoto testu ověř, že v sorter_rules.db")
