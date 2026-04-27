@@ -181,7 +181,7 @@ def _log_sort(
     HISTORY_FILE.parent.mkdir(parents=True, exist_ok=True)
     logged_sort_keys, logged_sort_semantic_keys = _load_logged_sort_keys()
     semantic_key = _semantic_key(sender, subject, body)
-    if not force and (email_key in logged_sort_keys or semantic_key in logged_sort_semantic_keys):
+    if not force and (email_key in logged_sort_keys or (not message_id and semantic_key in logged_sort_semantic_keys)):
         return
 
     record = {
