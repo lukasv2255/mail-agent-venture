@@ -12,7 +12,10 @@ __pycache__/
 .venv/
 venv/
 logs/
-data/*.db
+data/
+git_history
+.claude/skills/
+.agents/skills/
 NEXT_STEPS.md
 MAILBOX_SWITCH_NEXT_STEPS.md
 launchd/*.plist
