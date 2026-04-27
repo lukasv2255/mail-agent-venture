@@ -134,6 +134,42 @@ def add_move_rule_from_email(
     raise ValueError(f"Neznámý rule_mode='{rule_mode}'.")
 
 
+def add_keep_rule(sender: str, source: str = "dashboard") -> dict:
+    sender_value = build_sender_rule_value(sender)
+    if not sender_value:
+        raise ValueError("Email nemá použitelnou adresu odesílatele pro KEEP pravidlo.")
+    created_at = datetime.now(timezone.utc).isoformat()
+    with _connect() as conn:
+        cursor = conn.execute(
+            """
+            INSERT OR IGNORE INTO sorter_rules (rule_type, rule_value, action, source, created_at)
+            VALUES (?, ?, 'KEEP', ?, ?)
+            """,
+            ("from_address", sender_value, source, created_at),
+        )
+        created = cursor.rowcount > 0
+    if created:
+        logger.info(f"[sorter-rules] Přidáno pravidlo KEEP: from_address={sender_value}")
+    return {"rule_type": "from_address", "rule_value": sender_value, "created": created}
+
+
+def match_keep_rule(sender: str) -> Optional[dict]:
+    sender_value = build_sender_rule_value(sender)
+    if not sender_value:
+        return None
+    with _connect() as conn:
+        row = conn.execute(
+            """
+            SELECT id, rule_type, rule_value, action, source, created_at
+            FROM sorter_rules
+            WHERE action = 'KEEP' AND rule_type = 'from_address' AND rule_value = ?
+            LIMIT 1
+            """,
+            (sender_value,),
+        ).fetchone()
+    return dict(row) if row else None
+
+
 def match_move_rule(sender: str, subject: str, body: str) -> Optional[dict]:
     candidates = []
     sender_value = build_sender_rule_value(sender)
