@@ -399,13 +399,27 @@
       <span id="meta-queue" style="color: #666"></span>
     </div>
 
-    <div id="pending-card" class="empty">Načítám...</div>
-    <div id="esc-section"></div>
-    <div id="unk-section"></div>
+    <div
+      style="
+        display: flex;
+        gap: 24px;
+        align-items: flex-start;
+        margin-top: 16px;
+      "
+    >
+      <!-- Levý panel: pravidla -->
+      <div id="rules-section" style="flex: 0 0 280px; min-width: 0"></div>
 
-    <div id="history-section" style="margin-top: 32px"></div>
-    <div id="sorter-history-section" style="margin-top: 32px"></div>
-    <div id="rules-section" style="margin-top: 32px"></div>
+      <!-- Hlavní obsah -->
+      <div style="flex: 1; min-width: 0">
+        <div id="pending-card" class="empty">Načítám...</div>
+        <div id="esc-section"></div>
+        <div id="unk-section"></div>
+        <div id="history-section" style="margin-top: 32px"></div>
+        <div id="sorter-history-section" style="margin-top: 32px"></div>
+      </div>
+    </div>
+
     <div id="status"></div>
 
     <script>
@@ -959,7 +973,7 @@
         const el = document.getElementById("rules-section");
         if (!el) return;
         try {
-          const res = await fetch("/api/sorter/list-rules");
+          const res = await fetch("/api/sorter/rules");
           const data = await res.json();
           const rules = data.rules || [];
           if (!rules.length) {
