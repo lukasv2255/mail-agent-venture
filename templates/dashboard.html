@@ -375,7 +375,7 @@
         margin-bottom: 6px;
       "
     >
-      <h1>Mail agent Venture</h1>
+      <h1>Mail agent - template</h1>
       <button
         id="btn-check"
         onclick="triggerCheck()"
@@ -405,6 +405,7 @@
 
     <div id="history-section" style="margin-top: 32px"></div>
     <div id="sorter-history-section" style="margin-top: 32px"></div>
+    <div id="rules-section" style="margin-top: 32px"></div>
     <div id="status"></div>
 
     <script>
@@ -954,12 +955,67 @@
         } catch (_) {}
       }
 
+      async function refreshRules() {
+        const el = document.getElementById("rules-section");
+        if (!el) return;
+        try {
+          const res = await fetch("/api/sorter/list-rules");
+          const data = await res.json();
+          const rules = data.rules || [];
+          if (!rules.length) {
+            el.innerHTML = `<span class="section-label">📋 Pravidla (0)</span><div style="color:#555;margin-top:8px">Žádná pravidla.</div>`;
+            return;
+          }
+          const actionLabel = { KEEP: "✅ KEEP", MOVE: "🚫 MOVE" };
+          const rows = rules
+            .map(
+              (r) => `
+            <tr>
+              <td><span class="outcome-badge ${r.action === "KEEP" ? "outcome-approved" : "outcome-rejected"}">${actionLabel[r.action] || r.action}</span></td>
+              <td style="color:#aaa">${esc(r.rule_type)}</td>
+              <td style="word-break:break-all">${esc(r.rule_value)}</td>
+              <td style="color:#555;white-space:nowrap">${esc(r.source)}</td>
+              <td>
+                <button class="detail-action-btn" onclick="deleteRule(${r.id}, this)">Smazat</button>
+              </td>
+            </tr>`,
+            )
+            .join("");
+          el.innerHTML = `
+            <span class="section-label">📋 Pravidla (${rules.length})</span>
+            <table class="history-table" style="margin-top:8px">
+              <thead><tr><th>Akce</th><th>Typ</th><th>Hodnota</th><th>Zdroj</th><th></th></tr></thead>
+              <tbody>${rows}</tbody>
+            </table>`;
+        } catch (_) {}
+      }
+
+      async function deleteRule(id, btn) {
+        btn.disabled = true;
+        btn.textContent = "...";
+        try {
+          const res = await fetch("/api/sorter/delete-rule-by-id", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id }),
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          await refreshRules();
+        } catch (err) {
+          btn.disabled = false;
+          btn.textContent = "Smazat";
+          alert("Chyba: " + err.message);
+        }
+      }
+
       refresh();
       refreshHistory();
       refreshSorterHistory();
+      refreshRules();
       setInterval(refresh, REFRESH_MS);
       setInterval(refreshHistory, 15000);
       setInterval(refreshSorterHistory, 15000);
+      setInterval(refreshRules, 30000);
     </script>
   </body>
 </html>
