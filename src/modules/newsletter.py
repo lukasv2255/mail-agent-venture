@@ -289,16 +289,17 @@ def _send_via_gmail(content: str, subject: str) -> str:
     address = os.getenv("GMAIL_ADDRESS")
     if not address:
         raise ValueError("GMAIL_ADDRESS není nastavena.")
+    recipient = os.getenv("NEWSLETTER_RECIPIENT", address)
 
     service = get_gmail_service()
     msg = MIMEText(content, "plain", "utf-8")
-    msg["To"] = address
+    msg["To"] = recipient
     msg["Subject"] = subject
     # From nastavuje Gmail sám — nenastavovat ručně (viz lessons.md)
 
     raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
     service.users().messages().send(userId="me", body={"raw": raw}).execute()
-    return address
+    return recipient
 
 
 def _send_via_smtp(content: str, subject: str) -> str:
