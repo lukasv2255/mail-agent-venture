@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Mail agent - template — Dashboard</title>
+    <title>Mail agent {{CLIENT_NAME}} — Dashboard</title>
     <style>
       * {
         box-sizing: border-box;
@@ -375,7 +375,7 @@
         margin-bottom: 6px;
       "
     >
-      <h1>Mail agent - template</h1>
+      <h1>Mail agent {{CLIENT_NAME}}</h1>
       <button
         id="btn-check"
         onclick="triggerCheck()"
@@ -409,6 +409,25 @@
         border-bottom: 1px solid #222;
       "
     >
+      <a
+        id="tab-responder"
+        href="#"
+        onclick="
+          showTab('responder');
+          return false;
+        "
+        style="
+          padding: 8px 16px;
+          text-decoration: none;
+          font-size: 13px;
+          border-radius: 6px 6px 0 0;
+          border: 1px solid #222;
+          border-bottom: none;
+          margin-bottom: -1px;
+        "
+      >
+        📬 Responder
+      </a>
       <a
         id="tab-sorter"
         href="#"
@@ -449,13 +468,17 @@
       </a>
     </div>
 
-    <!-- Sorter view -->
-    <div id="view-sorter">
+    <!-- Responder view -->
+    <div id="view-responder">
       <div id="pending-card" class="empty">Načítám...</div>
       <div id="esc-section"></div>
       <div id="unk-section"></div>
       <div id="history-section" style="margin-top: 32px"></div>
-      <div id="sorter-history-section" style="margin-top: 32px"></div>
+    </div>
+
+    <!-- Sorter view -->
+    <div id="view-sorter" style="display: none">
+      <div id="sorter-history-section"></div>
     </div>
 
     <!-- Rules view -->
@@ -470,19 +493,24 @@
       let _isPolling = false;
 
       function showTab(tab) {
+        document.getElementById("view-responder").style.display =
+          tab === "responder" ? "" : "none";
         document.getElementById("view-sorter").style.display =
           tab === "sorter" ? "" : "none";
         document.getElementById("view-rules").style.display =
           tab === "rules" ? "" : "none";
         const active = "background:#111;color:#4caf50;border-color:#333";
         const inactive = "background:transparent;color:#888;border-color:#222";
+        document.getElementById("tab-responder").style.cssText +=
+          ";" + (tab === "responder" ? active : inactive);
         document.getElementById("tab-sorter").style.cssText +=
           ";" + (tab === "sorter" ? active : inactive);
         document.getElementById("tab-rules").style.cssText +=
           ";" + (tab === "rules" ? active : inactive);
         if (tab === "rules") refreshRules();
+        if (tab === "sorter") refreshSorterHistory();
       }
-      showTab("sorter");
+      showTab("responder");
 
       async function refresh() {
         try {

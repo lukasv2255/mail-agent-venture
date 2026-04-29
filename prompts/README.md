@@ -14,9 +14,5 @@ Produkční soubory které agent aktivně čte za běhu. Změna těchto souborů
 
 ## Vztah k tests/
 
-Každý projekt má vlastní KB v `tests/<modul>/<projekt>/kb.md`.
-Aby agent používal KB daného projektu, zkopíruj soubory do `prompts/`:
-
-```
-cp tests/responder/kb.md prompts/kb_projekt01.md
-```
+Testovací scénáře v `tests/responder/` používají přímo KB soubory z `prompts/`.
+KB se neudržuje odděleně v `tests/` — produkční zdroj pravdy jsou `prompts/kb_*.md`.

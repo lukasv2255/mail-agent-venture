@@ -66,7 +66,10 @@ def _check_token(request: Request):
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request):
     _check_token(request)
-    return HTMLResponse(content=(TEMPLATES_DIR / "dashboard.html").read_text(encoding="utf-8"))
+    client_name = os.getenv("CLIENT_NAME", "template").upper()
+    html = (TEMPLATES_DIR / "dashboard.html").read_text(encoding="utf-8")
+    html = html.replace("{{CLIENT_NAME}}", client_name)
+    return HTMLResponse(content=html)
 
 
 @app.get("/api/status")
