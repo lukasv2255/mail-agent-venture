@@ -137,15 +137,19 @@ def main():
         print("Chyba: nastav TEST_TARGET_EMAIL nebo GMAIL_ADDRESS v .env")
         sys.exit(1)
 
-    print(f"Odesílám 4 testovací emaily na {TARGET}...\n")
+    delay = 10  # sekund mezi emaily — sorter má čas zpracovat každý zvlášť
+    print(f"Odesílám 4 testovací emaily na {TARGET} (pauza {delay}s mezi každým)...\n")
     service = get_gmail_service()
 
     send_html_only(service)
-    time.sleep(3)
+    print(f"  ⏳ Čekám {delay}s...")
+    time.sleep(delay)
     send_multipart(service)
-    time.sleep(3)
+    print(f"  ⏳ Čekám {delay}s...")
+    time.sleep(delay)
     send_plain_text(service)
-    time.sleep(3)
+    print(f"  ⏳ Čekám {delay}s...")
+    time.sleep(delay)
     send_apple_mail_html(service)
 
     print(

@@ -23,8 +23,6 @@
       "Bash(wget *)",
       "Bash(git push --force *)",
       "Bash(DROP *)",
-      "Read(./.env)",
-      "Read(./.env.*)",
       "Read(./secrets/*)"
     ]
   },

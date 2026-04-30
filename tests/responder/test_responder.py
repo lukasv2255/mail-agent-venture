@@ -16,7 +16,7 @@ load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
 from src.gmail_client import get_gmail_service
 
-TARGET = os.getenv("TEST_TARGET_EMAIL", os.getenv("GMAIL_ADDRESS", ""))
+TARGET = os.getenv("TEST_TARGET_EMAIL", os.getenv("IMAP_USER", ""))
 
 TEMPLATES = [
     {

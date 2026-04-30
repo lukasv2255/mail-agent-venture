@@ -1,0 +1,36 @@
+# Volitelný whitelist zdrojů pro newsletter (domény).
+# Každý řádek = jedna doména bez protokolu (např. example.cz).
+#
+# Jak to použít:
+# - Nech prázdné, pokud chceš čistě "celý web" přes vyhledávání.
+# - Přidej 5–30 domén, pokud chceš stabilnější a kvalitnější výsledky.
+# - Modul newsletter si z toho automaticky udělá doplňkové dotazy typu site:domena.cz.
+#
+# Příklad:
+# seznamzpravy.cz
+# irozhlas.cz
+# idnes.cz
+# novinky.cz
+# vz.cz
+
+# Auto-vybrané z posledních běhů (data/newsletter/domain_stats.json)
+tzb-info.cz
+idnes.cz
+reality.idnes.cz
+sreality.cz
+bezrealitky.cz
+novostavby.com
+brno.cz
+lidovky.cz
+msstavby.cz
+obydleni.cz
+firmy.cz
+revitalizace-domy.cz
+revitalstav.cz
+rekonstrukce-morava.cz
+zatepleni-morava.cz
+nerez-komponenty.cz
+pekstav.cz
+abadia.cz
+fortexreality.cz
+zlinstav.com

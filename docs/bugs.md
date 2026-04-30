@@ -123,6 +123,20 @@ return ""
 
 **Prevence:** Použít `re` pouze při importu — nebo ověřit syntaxi py_compile před deploym.
 
+## 2026-04-25 — Tělo emailu se nezobrazuje v sorter historii na dashboardu
+
+**Symptom:** V sorter historii (rozkliknutý řádek) se tělo emailu zobrazuje jako `—` nebo prázdné místo, přestože email tělo obsahoval.
+
+**Root cause:** Tři příčiny dohromady:
+
+1. `item.body` bylo v JSONL prázdné (`""`) pro emaily klasifikované přes hlavičky nebo naučená pravidla — `_log_sort()` jim předával `body=""` bez extrakce textu.
+2. Pro HTML-only emaily vrací `_extract_body()` v `sorter.py` prázdný string — chybí HTML fallback (na rozdíl od `gmail_client.py` který ho má).
+3. Gmail fallback vrátí surové HTML tagy — `esc()` v JS je escapuje, zobrazí se jako text se `&lt;p&gt;` apod.
+
+**Řešení:** Frontend změněn na `item.body_display || "—"`. `body_display` přidáno do `_log_sort()`. HTML fallback opraven i v `gmail_client.py`.
+
+**Prevence:** Při logování sorter záznamu vždy extrahovat body před voláním `_log_sort()`, ne po.
+
 ---
 
 ## Příklady

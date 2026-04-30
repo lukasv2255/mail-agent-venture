@@ -7,16 +7,24 @@ scénáře, které už v repo testujeme:
   - responder
   - email_body
 
+Součástí responder skupiny jsou i unit testy pro dashboard alerts (pytest,
+bez odesílání emailů) — spustí se automaticky při --responder nebo --dashboard.
+
 Použití:
   python3 tests/run_mixed_week.py
   python3 tests/run_mixed_week.py --fast
   python3 tests/run_mixed_week.py --report
+  python3 tests/run_mixed_week.py --sorter --fast
+  python3 tests/run_mixed_week.py --responder --fast
+  python3 tests/run_mixed_week.py --dashboard
 
 Výchozí běh:
   - odesílatel: newagent7878@gmail.com
   - příjemce:   johnybb11@seznam.cz
   - počet:      1000 emailů
   - délka:      7 dní
+  - poměr:      ~50 % sorter (spam/newslettery/poptávky → UNK pro responder)
+                ~50 % responder (objednávky, vrácení, produkty — matchují projekt01 KB)
 """
 import argparse
 import asyncio
@@ -25,6 +33,7 @@ import importlib.util
 import json
 import random
 import signal
+import subprocess
 import sys
 from collections import Counter
 from datetime import datetime, timezone
@@ -183,10 +192,10 @@ PERSIST_SCENARIOS = [
 ]
 SCENARIOS.extend(PERSIST_SCENARIOS)
 SCENARIO_WEIGHTS = {
-    "sorter": 50,
-    "responder": 35,
-    "email-body": 15,
-    "persist": 20,
+    "sorter": 8,
+    "responder": 30,
+    "email-body": 3,
+    "persist": 5,
 }
 WEIGHTED_SCENARIOS = []
 for scenario in SCENARIOS:
@@ -389,10 +398,31 @@ def verify_sender(service, allow_other_sender: bool):
     return actual_sender
 
 
+DASHBOARD_TESTS = PROJECT_ROOT / "tests" / "responder" / "test_dashboard_alerts.py"
+
+
+def run_dashboard_unit_tests() -> bool:
+    """Spustí pytest testy pro dashboard alerts. Vrátí True pokud vše prošlo."""
+    print("\n--- Dashboard unit testy (pytest) ---")
+    result = subprocess.run(
+        [sys.executable, "-m", "pytest", str(DASHBOARD_TESTS), "-v"],
+        cwd=PROJECT_ROOT,
+    )
+    passed = result.returncode == 0
+    status = "OK" if passed else "SELHALY"
+    print(f"Dashboard unit testy: {status}\n")
+    return passed
+
+
 async def run(args):
     if args.report:
         print(generate_report())
         return
+
+    # --dashboard: pouze unit testy, bez odesílání emailů
+    if args.dashboard:
+        ok = run_dashboard_unit_tests()
+        sys.exit(0 if ok else 1)
 
     # Filtrování scénářů podle --sorter / --responder
     only_sources: set[str] = set()
@@ -400,6 +430,10 @@ async def run(args):
         only_sources.update({"sorter", "persist"})
     if args.responder:
         only_sources.add("responder")
+
+    # --responder zahrnuje i dashboard unit testy
+    if args.responder:
+        run_dashboard_unit_tests()
 
     if only_sources:
         active_scenarios = [s for s in SCENARIOS if s["source"] in only_sources]
@@ -451,7 +485,8 @@ def main():
     parser.add_argument("--days", type=float, default=7.0, help="Délka běhu ve dnech")
     parser.add_argument("--fast", action="store_true", help="Rychlý běh: 30 emailů okamžitě (nebo méně podle filtru)")
     parser.add_argument("--sorter", action="store_true", help="Jen sorter scénáře")
-    parser.add_argument("--responder", action="store_true", help="Jen responder scénáře")
+    parser.add_argument("--responder", action="store_true", help="Jen responder scénáře (včetně dashboard unit testů)")
+    parser.add_argument("--dashboard", action="store_true", help="Jen dashboard unit testy (pytest, bez odesílání emailů)")
     parser.add_argument("--report", action="store_true", help="Pouze vygeneruje report z logu")
     parser.add_argument("--seed", type=int, help="Fixní seed pro opakovatelný mix")
     parser.add_argument(

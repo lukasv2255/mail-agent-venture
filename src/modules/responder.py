@@ -211,13 +211,21 @@ async def run_batch(bot, emails: list):
     drafts = await asyncio.gather(*[
         loop.run_in_executor(None, generate_reply, email, email_type)
         for email, email_type in classified
-    ])
+    ], return_exceptions=True)
 
     if AUTO_RESPOND:
         for (email, email_type), draft in zip(classified, drafts):
-            send_reply(email, draft)
-            logger.info(f"[responder] [AUTO] Odesláno: '{email['subject']}'")
-            _log_response(email, email_type, "auto", draft)
+            if isinstance(draft, Exception):
+                logger.error(f"[responder] generate_reply selhal pro '{email['subject']}': {draft}")
+                _log_response(email, email_type, "unknown", auto_mode=True)
+                continue
+            try:
+                send_reply(email, draft)
+                logger.info(f"[responder] [AUTO] Odesláno: '{email['subject']}'")
+                _log_response(email, email_type, "auto", draft)
+            except Exception as e:
+                logger.error(f"[responder] send_reply selhal pro '{email['subject']}': {e}")
+                _log_response(email, email_type, "unknown", draft, auto_mode=True)
         return
 
     # Prezentuj schválení sekvenčně — drafty jsou už hotové

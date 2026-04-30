@@ -15,16 +15,16 @@ Po opravě, poučení nebo změně pravidla aktualizuj příslušný soubor.
 
 - **"nauč se"** = ulož dané pravidlo nebo poznatek do projektového nebo lokálního `.md` souboru podle kontextu.
 - **"dokumentuj"** = zapiš informaci do aktuální projektové paměti, typicky `tasks/lessons.md`, `docs/bugs.md`, nebo jiného relevantního memory dokumentu.
-- **"run"** = spusť tento projekt konkrétní cestou přes launchd. Hlavního agenta nepouštěj ručně přes `python3 main.py`.
+- **"run"** = spusť agenta: primárně Railway (zkontroluj logy tam), pokud Railway neběží, fallback na launchd (localhost).
 
 Tyto fráze ber jako explicitní pokyn k perzistentnímu zápisu nebo akci, ne jako běžnou konverzační formulaci.
 
 ## Spouštění
 
-- Hlavní agent se v tomto projektu spouští přes launchd.
-- Nepouštěj hlavního agenta ručně přes `python3 main.py`, pokud už je spravovaný launchd.
-- Instalace nebo regenerace launchd plistu: `python3 scripts/install_launchd.py`
-- Start/restart/stop dělej přes `launchctl`.
+- **Primární:** agent běží na Railway. Stav a logy kontroluj tam.
+- **Fallback:** pokud Railway neběží, agent běží lokálně přes launchd (dashboard na localhost).
+- Nikdy nespouštěj agenta ručně přes `python3 main.py` — vždy přes Railway nebo launchd.
+- Launchd: instalace/regenerace plistu: `python3 scripts/install_launchd.py`, start/stop přes `launchctl`.
 - Testovací skripty v `tests/` se mohou spouštět ručně.
 
 ## Template Zásady
@@ -65,4 +65,4 @@ Tyto fráze ber jako explicitní pokyn k perzistentnímu zápisu nebo akci, ne j
 
 - Před prací na dashboardu přečti `docs/qa/dashboard.md`.
 - Po změnách v Pythonu spusť minimálně `py_compile` pro dotčené soubory.
-- U běžícího agenta ověř stav přes launchd a logy, ne spuštěním druhé instance.
+- U běžícího agenta ověř stav přes Railway logy (primárně) nebo launchd (fallback), ne spuštěním druhé instance.

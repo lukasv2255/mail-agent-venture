@@ -23,7 +23,8 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
 
 from src.config import LOG_DIR, RESPONDER_HISTORY_LOG, SORTER_HISTORY_LOG, TEMPLATES_DIR
-from src.modules.sorter import move_kept_email_to_spam, remove_rule_and_restore_email
+from src.modules.sorter import move_kept_email_to_spam, remove_rule_and_restore_email, restore_and_keep
+from src.sorter_rules import delete_rule_by_id, list_rules
 from src.notifier import get_pending_item, get_queue_remaining, resolve_approval, get_alerts, clear_alert, get_unpin_callback
 
 logger = logging.getLogger(__name__)
@@ -65,7 +66,10 @@ def _check_token(request: Request):
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request):
     _check_token(request)
-    return HTMLResponse(content=(TEMPLATES_DIR / "dashboard.html").read_text(encoding="utf-8"))
+    client_name = os.getenv("CLIENT_NAME", "template").upper()
+    html = (TEMPLATES_DIR / "dashboard.html").read_text(encoding="utf-8")
+    html = html.replace("{{CLIENT_NAME}}", client_name)
+    return HTMLResponse(content=html)
 
 
 @app.get("/api/status")
@@ -272,6 +276,40 @@ async def api_sorter_remove_rule(request: Request):
         raise HTTPException(status_code=500, detail="Zrušení pravidla selhalo.") from exc
 
     return {"ok": True, **result}
+
+
+@app.post("/api/sorter/restore-and-keep")
+async def api_sorter_restore_and_keep(request: Request):
+    _check_token(request)
+    payload = await request.json()
+    email_key = (payload.get("email_key") or "").strip()
+    if not email_key:
+        raise HTTPException(status_code=400, detail="Chybí email_key.")
+    try:
+        result = restore_and_keep(email_key)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.error(f"Dashboard restore-and-keep selhal pro {email_key}: {exc}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Vrácení emailu selhalo.") from exc
+    return {"ok": True, **result}
+
+
+@app.get("/api/sorter/rules")
+async def api_sorter_list_rules(request: Request):
+    _check_token(request)
+    return {"rules": list_rules()}
+
+
+@app.post("/api/sorter/delete-rule-by-id")
+async def api_sorter_delete_rule_by_id(request: Request):
+    _check_token(request)
+    payload = await request.json()
+    rule_id = payload.get("id")
+    if not isinstance(rule_id, int):
+        raise HTTPException(status_code=400, detail="Chybí nebo neplatné id.")
+    deleted = delete_rule_by_id(rule_id)
+    return {"ok": deleted}
 
 
 @app.post("/api/reject")

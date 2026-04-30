@@ -12,18 +12,26 @@ Formát newsletteru je v prompts/newsletter_format.md.
 
 Env proměnné:
   NEWSLETTER_HOUR     — hodina odeslání v pondělí (default: 7)
+  NEWSLETTER_INTERVAL_DAYS — interval odesílání v dnech (default: 1)
+  NEWSLETTER_MIN_CHANGE — min. odlišnost vs. poslední (default: 0.12)
+  NEWSLETTER_FORCE_SEND — vynutí odeslání i při podobnosti (default: false)
   OPENAI_API_KEY      — povinné pro generování obsahu
   MAIL_CLIENT         — gmail nebo imap (default: gmail)
   GMAIL_ADDRESS       — pro Gmail
   IMAP_USER / SMTP_HOST / IMAP_PASSWORD — pro IMAP/SMTP
 """
+from __future__ import annotations
+
 import asyncio
 import base64
 import datetime
 import logging
 import os
+import json
+import re
 import smtplib
 from email.mime.text import MIMEText
+from urllib.parse import urlparse
 
 import requests
 from bs4 import BeautifulSoup
@@ -32,6 +40,7 @@ from openai import OpenAI
 from telegram.ext import CommandHandler
 
 from src.config import PROMPTS_DIR
+from src.config import DATA_DIR
 from src.gmail_client import get_gmail_service
 
 logger = logging.getLogger(__name__)
@@ -39,9 +48,12 @@ logger = logging.getLogger(__name__)
 NEWSLETTER_HOUR = int(os.getenv("NEWSLETTER_HOUR", "7"))
 NEWSLETTER_MINUTE = int(os.getenv("NEWSLETTER_MINUTE", "0"))
 NEWSLETTER_DAY = int(os.getenv("NEWSLETTER_DAY", "0"))       # 0=pondělí, 6=neděle (ignoruje se při INTERVAL_DAYS=1)
-NEWSLETTER_INTERVAL_DAYS = int(os.getenv("NEWSLETTER_INTERVAL_DAYS", "7"))  # 1=denně, 7=týdně
+NEWSLETTER_INTERVAL_DAYS = int(os.getenv("NEWSLETTER_INTERVAL_DAYS", "1"))  # 1=denně, 7=týdně
+NEWSLETTER_MIN_CHANGE = float(os.getenv("NEWSLETTER_MIN_CHANGE", "0.12"))  # min. odlišnost (0–1), jinak skip
+NEWSLETTER_FORCE_SEND = os.getenv("NEWSLETTER_FORCE_SEND", "false").lower() in ("1", "true", "yes")
 
 _QUERIES_FILE = PROMPTS_DIR / "newsletter_queries.txt"
+_SOURCES_FILE = PROMPTS_DIR / "newsletter_sources.txt"
 
 # Max počet URL jejichž obsah plně stáhneme (pomalejší, ale lepší data)
 MAX_FULL_SCRAPE = 3
@@ -70,6 +82,9 @@ Sestav newsletter PŘESNĚ podle zadaného formátu. \
 Filtruj jen to, co má přímý obchodní potenciál pro prodejce balkonů.
 """
 
+_DOMAIN_STATS_FILE = DATA_DIR / "newsletter" / "domain_stats.json"
+_LAST_SENT_FILE = DATA_DIR / "newsletter" / "last_sent.json"
+
 
 def _load_format() -> str:
     with open(_FORMAT_FILE, encoding="utf-8") as f:
@@ -83,6 +98,145 @@ def _load_queries() -> list[str]:
             for line in f
             if line.strip() and not line.startswith("#")
         ]
+
+def _load_sources() -> list[str]:
+    """
+    Volitelný whitelist domén. Když soubor neexistuje, vrátí prázdný list.
+    """
+    try:
+        with open(_SOURCES_FILE, encoding="utf-8") as f:
+            sources: list[str] = []
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                # normalizace: doména bez protokolu a bez cesty
+                line = re.sub(r"^https?://", "", line)
+                line = line.split("/")[0].strip()
+                if line:
+                    sources.append(line)
+            return sources
+    except FileNotFoundError:
+        return []
+
+
+def _extract_domain(url: str) -> str:
+    try:
+        parsed = urlparse(url)
+        host = (parsed.netloc or "").lower()
+        if host.startswith("www."):
+            host = host[4:]
+        return host
+    except Exception:
+        return ""
+
+
+def _bump_domain_stats(urls: list[str]) -> None:
+    """
+    Ukládá agregované počty domén z výsledků vyhledávání.
+    Best-effort: při chybě jen zaloguje debug a pokračuje.
+    """
+    try:
+        counts: dict[str, int] = {}
+        for url in urls:
+            domain = _extract_domain(url)
+            if not domain:
+                continue
+            counts[domain] = counts.get(domain, 0) + 1
+        if not counts:
+            return
+
+        _DOMAIN_STATS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            with open(_DOMAIN_STATS_FILE, encoding="utf-8") as f:
+                current = json.load(f) or {}
+        except FileNotFoundError:
+            current = {}
+        except Exception:
+            current = {}
+
+        for domain, inc in counts.items():
+            current[domain] = int(current.get(domain, 0)) + inc
+
+        with open(_DOMAIN_STATS_FILE, "w", encoding="utf-8") as f:
+            json.dump(current, f, ensure_ascii=False, indent=2, sort_keys=True)
+    except Exception as e:
+        logger.debug(f"[newsletter] Nelze uložit statistiky domén: {e}")
+
+
+def _normalize_for_similarity(text: str) -> str:
+    """
+    Normalizace pro porovnání "podobnosti newsletteru".
+    Cíl: ignorovat týden/datum a stabilizovat whitespace.
+    """
+    text = (text or "").strip().lower()
+    if not text:
+        return ""
+    # Zahodit variabilní hlavičku s týdnem (pokud existuje)
+    text = re.sub(r"týden\s+\d+\s*/\s*\d{4}", "týden X / YYYY", text, flags=re.IGNORECASE)
+    text = re.sub(r"\b\d{1,2}\.\s*\d{1,2}\.\s*\d{4}\b", "DD. MM. YYYY", text)
+    # Unifikace separatorů
+    text = text.replace("───────────────────────────────", "—")
+    # Smazat opakované mezery
+    text = re.sub(r"\s+", " ", text)
+    return text
+
+
+def _shingles(text: str, k: int = 7) -> set[str]:
+    text = _normalize_for_similarity(text)
+    if len(text) <= k:
+        return {text} if text else set()
+    return {text[i : i + k] for i in range(0, len(text) - k + 1)}
+
+
+def _jaccard(a: set[str], b: set[str]) -> float:
+    if not a and not b:
+        return 1.0
+    if not a or not b:
+        return 0.0
+    inter = len(a & b)
+    union = len(a | b)
+    return inter / union if union else 0.0
+
+
+def _load_last_sent() -> dict:
+    try:
+        with open(_LAST_SENT_FILE, encoding="utf-8") as f:
+            return json.load(f) or {}
+    except FileNotFoundError:
+        return {}
+    except Exception as e:
+        logger.debug(f"[newsletter] Nelze načíst last_sent: {e}")
+        return {}
+
+
+def _save_last_sent(content: str, recipient: str, subject: str) -> None:
+    try:
+        _LAST_SENT_FILE.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "sent_at": datetime.datetime.utcnow().isoformat(timespec="seconds") + "Z",
+            "recipient": recipient,
+            "subject": subject,
+            "content": content,
+        }
+        with open(_LAST_SENT_FILE, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logger.debug(f"[newsletter] Nelze uložit last_sent: {e}")
+
+
+def _should_send(new_content: str) -> tuple[bool, float]:
+    """
+    Vrátí (poslat?, odlišnost). Odlišnost = 1 - podobnost.
+    """
+    last = _load_last_sent()
+    old_content = (last.get("content") or "").strip()
+    if not old_content:
+        return True, 1.0
+
+    sim = _jaccard(_shingles(old_content), _shingles(new_content))
+    change = 1.0 - sim
+    return change >= NEWSLETTER_MIN_CHANGE, change
 
 
 def setup(app):
@@ -136,11 +290,22 @@ async def _generate_and_send(bot):
         logger.info("[newsletter] Generuji obsah pomocí GPT-4o...")
         content = await loop.run_in_executor(None, _generate_content, raw_data)
 
-        logger.info("[newsletter] Odesílám email...")
-        recipient = await loop.run_in_executor(None, _send_email, content)
+        should_send, change = await loop.run_in_executor(None, _should_send, content)
+        if NEWSLETTER_FORCE_SEND:
+            should_send = True
 
-        await bot.send_message(chat_id=chat_id, text=f"✅ Newsletter odeslán na {recipient}")
-        logger.info(f"[newsletter] Hotovo → {recipient}")
+        if not should_send:
+            msg = f"⏭️ Newsletter neodeslán (příliš podobný poslednímu; změna {change:.0%})."
+            await bot.send_message(chat_id=chat_id, text=msg)
+            logger.info(f"[newsletter] Skip send: change={change:.3f}")
+            return
+
+        logger.info("[newsletter] Odesílám email...")
+        recipient, subject = await loop.run_in_executor(None, _send_email, content)
+        await loop.run_in_executor(None, _save_last_sent, content, recipient, subject)
+
+        await bot.send_message(chat_id=chat_id, text=f"✅ Newsletter odeslán na {recipient} (změna {change:.0%})")
+        logger.info(f"[newsletter] Hotovo → {recipient}, change={change:.3f}")
 
     except Exception as e:
         logger.error(f"[newsletter] Chyba: {e}", exc_info=True)
@@ -160,7 +325,22 @@ def _collect_data() -> str:
     scraped_urls: set[str] = set()
     full_scrape_count = 0
 
-    for query in _load_queries():
+    sources = _load_sources()
+    source_queries: list[str] = []
+    if sources:
+        # 2 doplňkové dotazy na doménu: (A) lead signály, (B) inspirační témata
+        for domain in sources[:30]:
+            source_queries.append(
+                f"site:{domain} (balkon OR balkón OR lodžie OR terasa) (developer OR projekt OR bytový dům OR rekonstrukce OR veřejná zakázka)"
+            )
+            source_queries.append(
+                f"site:{domain} (balkon OR balkón OR lodžie OR terasa) (zábradlí OR zasklení OR hydroizolace OR statika OR koroze OR sanace)"
+            )
+
+    all_queries = _load_queries() + source_queries
+
+    all_result_urls: list[str] = []
+    for query in all_queries:
         try:
             results = _ddg_search(query)
             if not results:
@@ -169,6 +349,7 @@ def _collect_data() -> str:
             lines = []
             for item in results:
                 url = item["url"]
+                all_result_urls.append(url)
                 lines.append(
                     f"TITULEK: {item['title']}\n"
                     f"URL: {url}\n"
@@ -192,6 +373,7 @@ def _collect_data() -> str:
         except Exception as e:
             logger.warning(f"[newsletter] Chyba při dotazu '{query}': {e}")
 
+    _bump_domain_stats(all_result_urls)
     return "\n\n".join(sections) or "Žádná data se nepodařilo získat."
 
 
@@ -225,7 +407,6 @@ def _fetch_page_text(url: str, max_chars: int = 2000) -> str:
             tag.decompose()
         text = soup.get_text(separator=" ", strip=True)
         # Zkrať přebytečné mezery
-        import re
         text = re.sub(r"\s{2,}", " ", text)
         return text[:max_chars]
     except Exception as e:
@@ -237,9 +418,9 @@ def _fetch_page_text(url: str, max_chars: int = 2000) -> str:
 # Generování obsahu
 # ---------------------------------------------------------------------------
 
-def _generate_content(raw_data: str) -> str:
+def _generate_content(raw_data: str, today: datetime.date | None = None) -> str:
     """Odešle data do GPT-4o, vrátí hotový text newsletteru."""
-    today = datetime.date.today()
+    today = today or datetime.date.today()
     week = today.isocalendar()[1]
     year = today.year
 
@@ -273,7 +454,7 @@ def _generate_content(raw_data: str) -> str:
 # Odeslání emailu
 # ---------------------------------------------------------------------------
 
-def _send_email(content: str) -> str:
+def _send_email(content: str) -> tuple[str, str]:
     """Odešle newsletter. Odesílatel = příjemce (klient posílá sám sobě)."""
     mail_client = os.getenv("NEWSLETTER_MAIL_CLIENT", "gmail").lower()
     today = datetime.date.today()
@@ -281,8 +462,10 @@ def _send_email(content: str) -> str:
     subject = f"📬 REALITY INFO – MORAVA | Týden {week}/{today.year}"
 
     if mail_client == "gmail":
-        return _send_via_gmail(content, subject)
-    return _send_via_smtp(content, subject)
+        recipient = _send_via_gmail(content, subject)
+        return recipient, subject
+    recipient = _send_via_smtp(content, subject)
+    return recipient, subject
 
 
 def _send_via_gmail(content: str, subject: str) -> str:

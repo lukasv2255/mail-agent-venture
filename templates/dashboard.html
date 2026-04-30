@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Mail agent - template — Dashboard</title>
+    <title>Mail agent {{CLIENT_NAME}} — Dashboard</title>
     <style>
       * {
         box-sizing: border-box;
@@ -53,21 +53,6 @@
       .badge.auto {
         background: #1a2a3a;
         color: #4db6ff;
-      }
-
-      /* Karta čekajícího emailu */
-      #pending-card {
-        background: #1a1a1a;
-        border: 1px solid #2a2a2a;
-        border-radius: 8px;
-        padding: 20px;
-        margin-bottom: 20px;
-      }
-      #pending-card.empty {
-        border-color: #1a1a1a;
-        color: #444;
-        text-align: center;
-        padding: 40px;
       }
 
       .email-meta {
@@ -375,7 +360,7 @@
         margin-bottom: 6px;
       "
     >
-      <h1>Mail agent Venture</h1>
+      <h1>Mail agent {{CLIENT_NAME}}</h1>
       <button
         id="btn-check"
         onclick="triggerCheck()"
@@ -399,17 +384,116 @@
       <span id="meta-queue" style="color: #666"></span>
     </div>
 
-    <div id="pending-card" class="empty">Načítám...</div>
-    <div id="esc-section"></div>
-    <div id="unk-section"></div>
+    <!-- Tab navigace -->
+    <div
+      style="
+        display: flex;
+        gap: 8px;
+        margin-top: 16px;
+        margin-bottom: 24px;
+        border-bottom: 1px solid #222;
+      "
+    >
+      <a
+        id="tab-responder"
+        href="#"
+        onclick="
+          showTab('responder');
+          return false;
+        "
+        style="
+          padding: 8px 16px;
+          text-decoration: none;
+          font-size: 13px;
+          border-radius: 6px 6px 0 0;
+          border: 1px solid #222;
+          border-bottom: none;
+          margin-bottom: -1px;
+        "
+      >
+        📬 Responder
+      </a>
+      <a
+        id="tab-sorter"
+        href="#"
+        onclick="
+          showTab('sorter');
+          return false;
+        "
+        style="
+          padding: 8px 16px;
+          text-decoration: none;
+          font-size: 13px;
+          border-radius: 6px 6px 0 0;
+          border: 1px solid #222;
+          border-bottom: none;
+          margin-bottom: -1px;
+        "
+      >
+        🗂 Sorter
+      </a>
+      <a
+        id="tab-rules"
+        href="#"
+        onclick="
+          showTab('rules');
+          return false;
+        "
+        style="
+          padding: 8px 16px;
+          text-decoration: none;
+          font-size: 13px;
+          border-radius: 6px 6px 0 0;
+          border: 1px solid #222;
+          border-bottom: none;
+          margin-bottom: -1px;
+        "
+      >
+        📋 Pravidla
+      </a>
+    </div>
 
-    <div id="history-section" style="margin-top: 32px"></div>
-    <div id="sorter-history-section" style="margin-top: 32px"></div>
+    <!-- Responder view -->
+    <div id="view-responder">
+      <div id="esc-section"></div>
+      <div id="unk-section"></div>
+      <div id="history-section" style="margin-top: 32px"></div>
+    </div>
+
+    <!-- Sorter view -->
+    <div id="view-sorter" style="display: none">
+      <div id="sorter-history-section"></div>
+    </div>
+
+    <!-- Rules view -->
+    <div id="view-rules" style="display: none">
+      <div id="rules-section"></div>
+    </div>
+
     <div id="status"></div>
 
     <script>
       const REFRESH_MS = 5000;
-      let _isPolling = false;
+
+      function showTab(tab) {
+        document.getElementById("view-responder").style.display =
+          tab === "responder" ? "" : "none";
+        document.getElementById("view-sorter").style.display =
+          tab === "sorter" ? "" : "none";
+        document.getElementById("view-rules").style.display =
+          tab === "rules" ? "" : "none";
+        const active = "background:#111;color:#4caf50;border-color:#333";
+        const inactive = "background:transparent;color:#888;border-color:#222";
+        document.getElementById("tab-responder").style.cssText +=
+          ";" + (tab === "responder" ? active : inactive);
+        document.getElementById("tab-sorter").style.cssText +=
+          ";" + (tab === "sorter" ? active : inactive);
+        document.getElementById("tab-rules").style.cssText +=
+          ";" + (tab === "rules" ? active : inactive);
+        if (tab === "rules") refreshRules();
+        if (tab === "sorter") refreshSorterHistory();
+      }
+      showTab("responder");
 
       async function refresh() {
         try {
@@ -419,13 +503,10 @@
 
           // Responder-závislé prvky
           const btnCheck = document.getElementById("btn-check");
-          const pendingCard = document.getElementById("pending-card");
           if (!data.responder_enabled) {
             btnCheck.style.display = "none";
-            pendingCard.style.display = "none";
           } else {
             btnCheck.style.display = "";
-            pendingCard.style.display = "";
           }
 
           // Meta
@@ -492,87 +573,9 @@
               .join("")}`
               : "";
 
-          // Pending
-          const card = document.getElementById("pending-card");
-          if (!data.pending) {
-            if (!_isPolling) {
-              card.className = "empty";
-              card.innerHTML = "⏳ Čekám na další email...";
-            }
-            return;
-          }
-
-          const p = data.pending;
-          card.className = "";
-          card.innerHTML = `
-      <div class="email-meta">
-        <div class="row"><span class="label">Od:</span><span class="value">${esc(p.from)}</span></div>
-        <div class="row"><span class="label">Předmět:</span><span class="value">${esc(p.subject)}</span></div>
-        <div class="row"><span class="label">Typ:</span><span class="type-badge">${esc(p.email_type)}</span></div>
-      </div>
-      <div class="section-label">Navrhovaná odpověď</div>
-      <div class="draft-box">${esc(p.draft)}</div>
-      ${
-        data.auto_respond
-          ? ""
-          : `
-      <div class="actions">
-        <button id="btn-approve" onclick="approve()">✅ Schválit a odeslat</button>
-        <button id="btn-reject"  onclick="reject()">❌ Zamítnout</button>
-      </div>`
-      }
-    `;
-
           setStatus("");
         } catch (err) {
           setStatus(`Chyba: ${err.message}`, "error");
-        }
-      }
-
-      async function approve() {
-        await action("/api/approve");
-      }
-
-      async function reject() {
-        await action("/api/reject");
-      }
-
-      async function action(url) {
-        // Optimistické UI — karta zmizí okamžitě
-        _isPolling = true;
-        const card = document.getElementById("pending-card");
-        card.className = "empty";
-        card.innerHTML = "⏳ Čekám na další email...";
-
-        try {
-          const res = await fetch(url, { method: "POST" });
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          refreshHistory();
-          pollForNext(60);
-        } catch (err) {
-          _isPolling = false;
-          setStatus(`Chyba: ${err.message}`, "error");
-          refresh();
-        }
-      }
-
-      async function pollForNext(remaining) {
-        if (remaining <= 0) {
-          _isPolling = false;
-          refresh();
-          return;
-        }
-        try {
-          const res = await fetch("/api/status");
-          const data = await res.json();
-          if (data.pending) {
-            _isPolling = false;
-            refresh();
-          } else {
-            setTimeout(() => pollForNext(remaining - 1), 500);
-          }
-        } catch {
-          setTimeout(() => pollForNext(remaining - 1), 500);
         }
       }
 
@@ -627,10 +630,6 @@
           if (!res.ok) return;
           const data = await res.json();
           const el = document.getElementById("history-section");
-          if (!data.total) {
-            el.innerHTML = "";
-            return;
-          }
 
           const outcomeLabel = {
             approved: "✅ Odesláno",
@@ -725,11 +724,17 @@
               <span class="section-label">📋 Historie (${data.total})</span>
               <div style="display:flex;gap:4px">${filterTabs}</div>
             </div>
+            ${
+              data.total === 0
+                ? `<div style="color:#555;padding:16px 0">Žádné záznamy.</div>`
+                : `
             <table class="history-table">
               <thead><tr><th>Čas</th><th>Od</th><th>Předmět</th><th>Typ</th><th>Výsledek</th><th></th></tr></thead>
               <tbody>${rows}</tbody>
             </table>
-            ${pagination}`;
+            ${pagination}`
+            }
+          `;
         } catch (_) {}
       }
 
@@ -764,6 +769,36 @@
                 : data.rule_type;
           const nextFilter = _sorterFilter === "kept" ? "all" : _sorterFilter;
           setStatus(`Email přesunut. Naučeno jako ${ruleLabel}.`, "ok");
+          await refreshSorterHistory(1, nextFilter);
+        } catch (err) {
+          if (button) {
+            button.disabled = false;
+            button.textContent = originalText;
+          }
+          setStatus(`Chyba: ${err.message}`, "error");
+        }
+      }
+
+      async function restoreAndKeep(emailKey, button) {
+        if (!emailKey) return;
+        const originalText = button ? button.textContent : "";
+        if (button) {
+          button.disabled = true;
+          button.textContent = "Vracím...";
+        }
+        try {
+          const res = await fetch("/api/sorter/restore-and-keep", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email_key: emailKey }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+          const nextFilter = _sorterFilter === "moved" ? "all" : _sorterFilter;
+          setStatus(
+            "Email vrácen do inboxu a odesílatel přidán do KEEP pravidel.",
+            "ok",
+          );
           await refreshSorterHistory(1, nextFilter);
         } catch (err) {
           if (button) {
@@ -884,6 +919,17 @@
                       </button>
                     </div>`
                   : "";
+              const restoreAndKeepButton =
+                item.outcome === "moved" && item.email_key && !item.rule_type
+                  ? `<div class="detail-actions">
+                      <button
+                        class="detail-action-btn"
+                        onclick='event.stopPropagation(); restoreAndKeep(${JSON.stringify(item.email_key)}, this)'
+                      >
+                        Vrátit a vždy ponechat
+                      </button>
+                    </div>`
+                  : "";
               return `
               <tr class="history-row" onclick="toggleDetail('${idx}')">
                 <td style="color:#555;white-space:nowrap">${esc(time)}</td>
@@ -899,6 +945,7 @@
                   <div class="detail-text">${esc(item.body_display || item.body || "—")}</div>
                   ${moveButton}
                   ${removeRuleButton}
+                  ${restoreAndKeepButton}
                 </td>
               </tr>`;
             })
@@ -954,12 +1001,67 @@
         } catch (_) {}
       }
 
+      async function refreshRules() {
+        const el = document.getElementById("rules-section");
+        if (!el) return;
+        try {
+          const res = await fetch("/api/sorter/rules");
+          const data = await res.json();
+          const rules = data.rules || [];
+          if (!rules.length) {
+            el.innerHTML = `<span class="section-label">📋 Pravidla (0)</span><div style="color:#555;margin-top:8px">Žádná pravidla.</div>`;
+            return;
+          }
+          const actionLabel = { KEEP: "✅ KEEP", MOVE: "🚫 MOVE" };
+          const rows = rules
+            .map(
+              (r) => `
+            <tr>
+              <td><span class="outcome-badge ${r.action === "KEEP" ? "outcome-approved" : "outcome-rejected"}">${actionLabel[r.action] || r.action}</span></td>
+              <td style="color:#aaa">${esc(r.rule_type)}</td>
+              <td style="word-break:break-all">${esc(r.rule_value)}</td>
+              <td style="color:#555;white-space:nowrap">${esc(r.source)}</td>
+              <td>
+                <button class="detail-action-btn" onclick="deleteRule(${r.id}, this)">Smazat</button>
+              </td>
+            </tr>`,
+            )
+            .join("");
+          el.innerHTML = `
+            <span class="section-label">📋 Pravidla (${rules.length})</span>
+            <table class="history-table" style="margin-top:8px">
+              <thead><tr><th>Akce</th><th>Typ</th><th>Hodnota</th><th>Zdroj</th><th></th></tr></thead>
+              <tbody>${rows}</tbody>
+            </table>`;
+        } catch (_) {}
+      }
+
+      async function deleteRule(id, btn) {
+        btn.disabled = true;
+        btn.textContent = "...";
+        try {
+          const res = await fetch("/api/sorter/delete-rule-by-id", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id }),
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          await refreshRules();
+        } catch (err) {
+          btn.disabled = false;
+          btn.textContent = "Smazat";
+          alert("Chyba: " + err.message);
+        }
+      }
+
       refresh();
       refreshHistory();
       refreshSorterHistory();
+      refreshRules();
       setInterval(refresh, REFRESH_MS);
       setInterval(refreshHistory, 15000);
       setInterval(refreshSorterHistory, 15000);
+      setInterval(refreshRules, 30000);
     </script>
   </body>
 </html>

@@ -3,7 +3,8 @@
 Projekt se má chovat jako šablona pro další klientské instance. Kód nesmí
 obsahovat absolutní cesty na konkrétní checkout, například
 `/Users/.../mail-agent`. Instance se liší konfigurací v `.env`, prompty a
-deploymentem.
+deploymentem. Doporučený Railway deploy workflow pro tento repo je popsaný v
+`docs/railway_deploy.md`.
 
 ## Princip
 
@@ -102,15 +103,16 @@ Responder a newsletter zapínej až po kontrole dashboardu a logů.
 
 ### Po doběhnutí wizardu
 
-Pro Railway:
+Pro Railway použij sjednocený postup z `docs/railway_deploy.md`:
 
 ```bash
 railway status
-# nahraj hodnoty z .env.railway do Railway variables
 railway up --detach --message "Client launch"
 railway deployment list
 railway logs --lines 120
 ```
+
+Před deployem nahraj hodnoty z `.env.railway` do Railway Variables.
 
 Pro lokální macOS launchd:
 

@@ -37,9 +37,12 @@ TELEGRAM_BOT_TOKEN=    # Telegram bot
 
 ## Railway deployment
 
-- Push na GitHub main → automatický deploy
-- Env proměnné nastaveny přímo v Railway dashboardu (ne v .env souboru)
-- `Procfile` nebo `railway.json` pro definici start příkazu
+- Pro `mail-agent` je doporučený deploy z lokálního checkoutu přes Railway CLI
+- Ověřit Railway link přes `railway status`
+- Env proměnné nahrát z lokálního `.env.railway` do Railway Variables
+- Nasazení: `railway up --detach --message "Client launch"`
+- Ověření: `railway deployment list` a `railway logs --lines 120`
+- Detailní postup: `docs/railway_deploy.md`
 
 ## Mail Agent — Railway infrastruktura
 
@@ -47,6 +50,7 @@ TELEGRAM_BOT_TOKEN=    # Telegram bot
 - **Project ID:** doplnit v konkrétní klientské instanci, ne v template repozitáři
 - **Service ID:** doplnit v konkrétní klientské instanci, ne v template repozitáři
 - **GitHub repo:** `https://github.com/lukasv2255/mail-agent`
+- **Start command:** `web: python main.py` (`Procfile`)
 - **Mailbox:** nastavuje se přes `MAIL_CLIENT` a související proměnné v `.env`
 - **Telegram Chat ID:** nastavuje se pouze v lokální `.env`
 
@@ -122,7 +126,17 @@ TELEGRAM_BOT_TOKEN=
 TELEGRAM_CHAT_ID=
 DRY_RUN=true
 CHECK_INTERVAL_MINUTES=60
+DATA_DIR=./data
 ```
+
+### Sorter feedback a persistence
+- Dashboard umí u položek `Ponecháno` ruční akci `Přesunout do spamu`
+- Ruční korekce ukládá pravidlo `MOVE` do `DATA_DIR/sorter_rules.db`
+- Sorter historie pro dashboard se ukládá do `DATA_DIR/logs/sorter/sorter.jsonl`
+- Historie má retenci přes `SORTER_HISTORY_MAX_ITEMS` (default `10000`)
+- Pravidla se aplikují před AI klasifikací
+- Ruční korekce používá stejnou cílovou složku jako sorter, tedy `SORTER_TARGET_FOLDER`
+- Aby pravidla i sorter historie přežily redeploy na Railway, `DATA_DIR` musí mířit na persistent volume nebo databázi
 
 ---
 
