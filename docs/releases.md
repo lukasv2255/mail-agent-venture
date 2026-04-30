@@ -22,7 +22,37 @@ Po rollbacku **vytvoř novou větev** (např. `hotfix/v2.1`) — nevyvíjej na d
 
 ---
 
-## v2.1 — 2026-04-26 ← aktuální
+## update — 2026-04-30 ← aktuální
+
+**Venture SHA před merge:** `1022afa` ← rollback bod
+**Venture SHA po merge:** `7c61841`
+**Template SHA:** `c719857`
+**Nasazeno:** Railway
+
+### Commity z template
+
+- c719857 test: mixed week poměr 50/50 sorter/responder
+- 360a0e3 fix: responder history přesunuta do DATA_DIR (persistentní přes redeploy)
+- cf2ecba fix: response prompt path lowercase — case-sensitive filesystem na Railway
+- a11e3f6 fix: responder run_batch error handling — return_exceptions + send_reply try/except
+- df6c4e8 fix: dashboard panel odstraneni, responder test fix, newsletter update, stdout logging
+- b31c896 feat: dashboard Responder tab + test struktura projekt01
+- cdfa416 feat: NEWSLETTER_RECIPIENT odděluje příjemce od odesílatele
+- 0403c0b feat: newsletter používá NEWSLETTER_MAIL_CLIENT místo MAIL_CLIENT
+- 395e316 chore: gitignore data/skills dirs, přidej prompty a testovací dokumentaci
+- ee1f56f feat: tlačítko Vrátit a vždy ponechat + oprava routing testů
+- 77d3b65 fix: semantic key dedup v \_log_sort taky ignoruje emaily s Message-ID
+- 03fe2f7 feat: tab navigace Sorter / Pravidla
+- bcbbf5a feat: pravidla do leveho sidebaru, oprava API URL /sorter/rules
+- 1d5dac0 feat: dashboard sekce Pravidla — zobrazení a mazání KEEP/MOVE pravidel
+- f2b2618 feat: add list_rules and delete_rule_by_id to sorter_rules
+- a7a27c9 feat: add add_keep_rule and match_keep_rule to sorter_rules
+- d19f43d fix: semantic key dedup ignoruje emaily s platnym Message-ID
+- aa0be2c feat: sorter rules persistence, dashboard akce, reorganizace testů
+
+---
+
+## v2.1 — 2026-04-26
 
 **Venture commit:** `19129c5`
 **Template commit:** `81def9c`
