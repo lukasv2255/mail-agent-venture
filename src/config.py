@@ -30,7 +30,7 @@ AGENT_LOG = LOG_DIR / "agent.log"
 AGENT_ERR_LOG = LOG_DIR / "agent_err.log"
 UPTIME_LOG = LOG_DIR / "uptime.jsonl"
 
-RESPONDER_LOG_DIR = LOG_DIR / "responder"
+RESPONDER_LOG_DIR = DATA_DIR / "logs" / "responder"
 RESPONDER_HISTORY_LOG = RESPONDER_LOG_DIR / "responses.jsonl"
 
 SORTER_LOG_DIR = DATA_DIR / "logs" / "sorter"
