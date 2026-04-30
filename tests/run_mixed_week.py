@@ -23,6 +23,8 @@ Výchozí běh:
   - příjemce:   johnybb11@seznam.cz
   - počet:      1000 emailů
   - délka:      7 dní
+  - poměr:      ~50 % sorter (spam/newslettery/poptávky → UNK pro responder)
+                ~50 % responder (objednávky, vrácení, produkty — matchují projekt01 KB)
 """
 import argparse
 import asyncio
@@ -190,10 +192,10 @@ PERSIST_SCENARIOS = [
 ]
 SCENARIOS.extend(PERSIST_SCENARIOS)
 SCENARIO_WEIGHTS = {
-    "sorter": 50,
-    "responder": 35,
-    "email-body": 15,
-    "persist": 20,
+    "sorter": 8,
+    "responder": 30,
+    "email-body": 3,
+    "persist": 5,
 }
 WEIGHTED_SCENARIOS = []
 for scenario in SCENARIOS:
