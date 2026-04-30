@@ -275,7 +275,7 @@ def _generate_content(raw_data: str) -> str:
 
 def _send_email(content: str) -> str:
     """Odešle newsletter. Odesílatel = příjemce (klient posílá sám sobě)."""
-    mail_client = os.getenv("MAIL_CLIENT", "gmail").lower()
+    mail_client = os.getenv("NEWSLETTER_MAIL_CLIENT", "gmail").lower()
     today = datetime.date.today()
     week = today.isocalendar()[1]
     subject = f"📬 REALITY INFO – MORAVA | Týden {week}/{today.year}"
@@ -289,16 +289,17 @@ def _send_via_gmail(content: str, subject: str) -> str:
     address = os.getenv("GMAIL_ADDRESS")
     if not address:
         raise ValueError("GMAIL_ADDRESS není nastavena.")
+    recipient = os.getenv("NEWSLETTER_RECIPIENT", address)
 
     service = get_gmail_service()
     msg = MIMEText(content, "plain", "utf-8")
-    msg["To"] = address
+    msg["To"] = recipient
     msg["Subject"] = subject
     # From nastavuje Gmail sám — nenastavovat ručně (viz lessons.md)
 
     raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
     service.users().messages().send(userId="me", body={"raw": raw}).execute()
-    return address
+    return recipient
 
 
 def _send_via_smtp(content: str, subject: str) -> str:

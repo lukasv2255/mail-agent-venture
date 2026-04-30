@@ -113,6 +113,18 @@ return ""
 
 **Prevence:** Nikdy nevytvářet `asyncio.Lock()` na úrovni modulu. `run_polling()` si vytváří vlastní event loop — vše co s ním interaguje musí být vytvořeno uvnitř `post_init` nebo async kontextu.
 
+## 2026-04-26 — /sort hlásí chyby pro HTML-only emaily (chybějící import re)
+
+**Symptom:** `/sort` vrací např. "Chyby: 14" — emaily s HTML tělem bez `text/plain` části selžou s `NameError: name 're' is not defined`.
+
+**Root cause:** `_extract_body` má fallback větev pro HTML emaily, která volá `re.sub(...)`, ale modul `re` nebyl importován v `sorter.py`.
+
+**Řešení:** Přidat `import re` do importů v `src/modules/sorter.py`.
+
+**Prevence:** Použít `re` pouze při importu — nebo ověřit syntaxi py_compile před deploym.
+
+---
+
 ## Příklady
 
 ## 2026-03-29 — DB připojení selhává na stagingu
