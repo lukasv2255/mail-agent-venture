@@ -22,7 +22,7 @@ def get_client():
 
 
 def load_response_prompt(email_type):
-    prompt_file = PROMPTS_DIR / f"response_{email_type}.txt"
+    prompt_file = PROMPTS_DIR / f"response_{email_type.lower()}.txt"
     if not prompt_file.exists():
         raise FileNotFoundError(f"Prompt soubor neexistuje: {prompt_file}")
     with open(prompt_file, encoding="utf-8") as f:
