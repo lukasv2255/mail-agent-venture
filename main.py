@@ -49,7 +49,7 @@ _agent_err_handler.setFormatter(_log_format)
 
 logging.basicConfig(
     level=logging.INFO,
-    handlers=[_agent_log_handler, _agent_err_handler],
+    handlers=[_agent_log_handler, _agent_err_handler, logging.StreamHandler()],
 )
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)

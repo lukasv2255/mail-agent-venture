@@ -3,7 +3,7 @@
 Týdenní B2B lead newsletter pro firmu prodávající a instalující balkony na Moravě.
 Zákazníci = developeři, stavební firmy, investoři do rekonstrukcí bytových domů.
 
-Jediná otázka: "Může z toho zákazník do 48h udělat obchod?" Pokud ne → vynech.
+Pro sekce 1–6 platí jediná otázka: "Může z toho zákazník do 48h udělat obchod?" Pokud ne → vynech.
 
 ---
 
@@ -85,6 +85,23 @@ Max 3 věci, nejdůležitější část.
 
 Vždy uvést odkud to je (URL, web developera, veřejná zakázka).
 •
+
+───────────────────────────────
+
+✍️ 8. INSPIRACE NA ČLÁNKY (PRO WEB)
+
+Cíl: po přečtení newsletteru má být jasné, jaký článek publikovat na web (edukační / bezpečnost / technologie / trendy), i když to není přímý lead do 48h.
+
+Dej 2–4 nápady. Struktura každého nápadu:
+• Téma (nadpis článku):
+• Proč teď (co je spouštěč / novinka):
+• Úhel pro ČR (jak to vysvětlit lokálně, co si z toho vzít):
+• Osnova (3–6 bodů):
+• Pro koho (SVJ / bytové domy / developery / rodinné domy):
+• 1 praktický takeaway (co má čtenář udělat/zjistit):
+• Zdroje (URL):
+
+Pokud nemáš nic relevantního, napiš: "Tento týden bez inspirace."
 
 ───────────────────────────────
 
